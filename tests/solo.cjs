@@ -43,7 +43,26 @@ for(const [index,gift] of require("../lib/world.ts").VILLAGE_GIFTS.entries()){
  game.setLocalPose(gift.x,1,gift.z,0);advance(100);
  assert.equal(game.round.giftCount,index+1);
 }
+assert.equal(game.round.status,"city");assert.equal(game.round.cityDelivered,0);
+const {CITY_TARGETS,CITY_SPEED,CITY_CRUISE_ALTITUDE,CITY_REQUIRED_DELIVERIES,CITY_LENGTH}=require("../lib/world.ts");
+assert.equal(game.getCityAim().aligned,false);
+assert.equal(game.dropPresent(),true);
+assert.equal(game.dropPresent(),false); // drop cooldown
+advance(4000);assert.equal(game.round.cityDelivered,0);
+const dropEvents=events.filter(e=>e.type==="presentDrop");
+assert(dropEvents.length===1&&dropEvents[0].hit===false);
+for(const [i,target] of CITY_TARGETS.slice(0,CITY_REQUIRED_DELIVERIES).entries()){
+ const flight=Math.sqrt(2*(CITY_CRUISE_ALTITUDE-target.y)/9.81);
+ game.round.cityDistance=-target.z-CITY_SPEED*flight;
+ game.round.cityX=target.x;
+ const aim=game.getCityAim();
+ assert(aim&&aim.aligned,`gift should align for target ${i}`);
+ assert.equal(game.dropPresent(),true);
+ advance(4000);
+ assert.equal(game.round.cityDelivered,i+1,`present should land at target ${i}`);
+}
 assert.equal(game.round.status,"rescued");assert.equal(game.myPlayer.score,1);assert(game.finishTime>0);
+assert.equal(events.filter(e=>e.type==="presentLanded"&&e.hit).length,CITY_REQUIRED_DELIVERIES);
 advance(12000);assert.equal(game.round.round,1);assert.equal(game.round.status,"rescued");
 game.stop();assert.equal(game.myPlayer,null);game.start();assert.equal(game.myPlayer.score,0);
 // The first south barricade lies directly between the scout and the target.
@@ -60,8 +79,8 @@ game.setLocalPose(23,1,-20,0);advance(1000);assert(charger.stunnedUntil>game.now
 game.myPlayer.health=40;game.setLocalPose(2,1,31,0);advance(100);assert.equal(game.myPlayer.health,75);
 advance(100);assert.equal(game.myPlayer.health,75);
 game.start();assert.equal(game.broken.size,0);assert.equal(game.collected.size,0);
-console.log("PASS: windup, dodge, ice collision, charged throws, healing, escort, sleigh flight and village gifts");
-console.log("PASS: separate solo sessions, movement, combat, health, rescue, flight transition, completion and restart");
+console.log("PASS: windup, dodge, ice collision, charged throws, healing, escort, sleigh flight, village gifts and city drop physics");
+console.log("PASS: separate solo sessions, movement, combat, health, rescue, 3 chapters, city score and replay");
 const {InputController}=require("../lib/InputController.ts");
 const input=new InputController(),realClock=global.performance;
 try{
