@@ -326,7 +326,7 @@ function CityFollow({game,input,lowPower}:{game:SoloGame;input:InputController;l
      camera.fov=T.MathUtils.damp(camera.fov,fov,3,dt);camera.updateProjectionMatrix();
    }
  });
- return <group ref={sleigh} position={[0,CITY_CRUISE_ALTITUDE,0]}><FlyingSleigh/></group>;
+ return <group ref={sleigh} position={[0,CITY_CRUISE_ALTITUDE,0]}><FlyingSleigh game={game}/></group>;
 }
 
 export default function CityChapter({game,input,lowPower}:{game:SoloGame;input:InputController;lowPower:boolean}){
