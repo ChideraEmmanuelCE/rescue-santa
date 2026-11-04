@@ -36,8 +36,15 @@ guard.downUntil=game.now()+60000;game.setLocalPose(30,1,0,0);advance(500);
 assert.equal(game.round.escort,0);
 for(let i=0;i<86;i++){game.setLocalPose(1,1,game.santaZ,0);advance(100);}
 assert.equal(game.round.status,"launching");advance(5000);
+assert.equal(game.round.status,"flight");assert.equal(game.myPlayer.score,0);
+advance(12000);assert.equal(game.round.status,"flight");assert(game.round.progress>.45);
+advance(12000);assert.equal(game.round.status,"village");assert.equal(game.round.giftCount,0);
+for(const [index,gift] of require("../lib/world.ts").VILLAGE_GIFTS.entries()){
+ game.setLocalPose(gift.x,1,gift.z,0);advance(100);
+ assert.equal(game.round.giftCount,index+1);
+}
 assert.equal(game.round.status,"rescued");assert.equal(game.myPlayer.score,1);assert(game.finishTime>0);
-advance(12000);assert.equal(game.round.round,2);
+advance(12000);assert.equal(game.round.round,1);assert.equal(game.round.status,"rescued");
 game.stop();assert.equal(game.myPlayer,null);game.start();assert.equal(game.myPlayer.score,0);
 // The first south barricade lies directly between the scout and the target.
 for(const e of game.enemies.values())e.downUntil=game.now()+60000;
@@ -53,8 +60,8 @@ game.setLocalPose(23,1,-20,0);advance(1000);assert(charger.stunnedUntil>game.now
 game.myPlayer.health=40;game.setLocalPose(2,1,31,0);advance(100);assert.equal(game.myPlayer.health,75);
 advance(100);assert.equal(game.myPlayer.health,75);
 game.start();assert.equal(game.broken.size,0);assert.equal(game.collected.size,0);
-console.log("PASS: windup, dodge, ice collision, charged throws, healing, escort, takeoff and reset");
-console.log("PASS: separate solo sessions, movement, shooting, enemy damage, respawn, rescue, round reset and restart");
+console.log("PASS: windup, dodge, ice collision, charged throws, healing, escort, sleigh flight and village gifts");
+console.log("PASS: separate solo sessions, movement, combat, health, rescue, flight transition, completion and restart");
 const {InputController}=require("../lib/InputController.ts");
 const input=new InputController(),realClock=global.performance;
 try{
