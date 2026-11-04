@@ -229,6 +229,40 @@ function HolidayDecor({lowPower}:{lowPower:boolean}){
  </>;
 }
 
+/** Distinct street landmarks break up the silhouette, rather than repeating empty boxes. */
+function UrbanLandmarks({lowPower}:{lowPower:boolean}){
+ const signs=[
+  {x:-29,z:-154,y:10,label:"WINTER CAFE",color:"#ffcc91"},
+  {x:29,z:-252,y:10,label:"TOY STORE",color:"#8ae3c9"},
+  {x:-29,z:-432,y:10,label:"HOLIDAY MARKET",color:"#ffbc91"},
+  {x:29,z:-608,y:11,label:"CINEMA",color:"#a8ccff"},
+  {x:-29,z:-805,y:9,label:"CITY BAKERY",color:"#ffe0ab"},
+  {x:29,z:-1003,y:9,label:"WINTER HOTEL",color:"#b9e6ff"}
+ ];
+ return <>
+  {signs.filter((_,i)=>!lowPower||i%2===0).map((s,i)=><group key={i} position={[s.x,s.y,s.z]} rotation-y={s.x>0?-Math.PI/2:Math.PI/2}>
+    <mesh><boxGeometry args={[12,2.6,.27]}/><meshStandardMaterial color="#162c3a" metalness={.3} roughness={.54}/></mesh>
+    <mesh position-z={.18}><boxGeometry args={[11.8,2.45,.11]}/><meshBasicMaterial color="#3c5461"/></mesh>
+    <Text position={[0,0,.3]} fontSize={1.13} maxWidth={11} anchorX="center" anchorY="middle" color={s.color} outlineWidth={.035} outlineColor="#09212c">{s.label}</Text>
+    <mesh position-y={1.45}><boxGeometry args={[12.15,.11,.31]}/><meshBasicMaterial color={s.color} toneMapped={false}/></mesh>
+  </group>)}
+  {[1,3,5,7,9].map((n,i)=><group key={n} position={[12.4,0,-43-n*102]}>
+    <mesh position-y={3.1}><cylinderGeometry args={[.12,.14,6.2,8]}/><meshStandardMaterial color="#384e50" metalness={.5}/></mesh>
+    <mesh position={[0,6.8,0]}><boxGeometry args={[.53,1.45,.57]}/><meshStandardMaterial color="#172f33" roughness={.4}/></mesh>
+    <mesh position={[0,6.35,.35]}><sphereGeometry args={[.17,10,8]}/><meshBasicMaterial color={i%2?"#e6bd67":"#60e6b1"} toneMapped={false}/></mesh>
+    <mesh position={[0,6.82,.35]}><sphereGeometry args={[.17,10,8]}/><meshBasicMaterial color="#454a43"/></mesh>
+    <mesh position={[0,7.3,.35]}><sphereGeometry args={[.17,10,8]}/><meshBasicMaterial color={i%2?"#cc3f48":"#493e3e"} toneMapped={false}/></mesh>
+  </group>)}
+  {[-1,1].map((side,i)=><group key={i} position={[side*79,0,-440-i*350]}>
+    <mesh position-y={30}><cylinderGeometry args={[10,15,60,12]}/><meshPhysicalMaterial color={side===1?"#586b7b":"#637b86"} roughness={.44} metalness={.44} clearcoat={.32}/></mesh>
+    <mesh position-y={60.2}><cylinderGeometry args={[11,11,1.4,12]}/><meshStandardMaterial color="#cbdde3" metalness={.32} roughness={.75}/></mesh>
+    {Array.from({length:12},(_,j)=><mesh key={j} position-y={7+j*4.5}><torusGeometry args={[10.32,.12,6,24]}/><meshBasicMaterial color={j%3===0?"#ffce8a":"#9cdded"} toneMapped={false}/></mesh>)}
+    <mesh position-y={68.1}><cylinderGeometry args={[.18,.28,15.5,8]}/><meshStandardMaterial color="#d4e6e3" metalness={.53}/></mesh>
+    <mesh position-y={76.3}><sphereGeometry args={[.45,12,9]}/><meshBasicMaterial color="#ff6b61" toneMapped={false}/></mesh>
+  </group>)}
+ </>;
+}
+
 function DeliveryZone({target,delivered}:{target:CityTarget;delivered:boolean}){
  const pulse=useRef<T.Group>(null);
  useFrame(({clock})=>{
@@ -375,6 +409,7 @@ export default function CityChapter({game,input,lowPower}:{game:SoloGame;input:I
    <Traffic mobile={lowPower}/>
    <Pedestrians mobile={lowPower}/>
    <HolidayDecor lowPower={lowPower}/>
+   <UrbanLandmarks lowPower={lowPower}/>
    <CityTargets game={game}/>
    <PredictedLanding game={game}/>
    <CityFollow game={game} input={input} lowPower={lowPower}/>
