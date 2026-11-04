@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import type { MutableRefObject } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { CuboidCollider, Physics, RigidBody } from "@react-three/rapier";
@@ -243,6 +243,7 @@ function VillageCamera({position,input}:{position:MutableRefObject<THREE.Vector3
 }
 
 function VillageWorld({game,input,lowPower}:{game:SoloGame;input:InputController;lowPower:boolean}) {
+  useSyncExternalStore(game.subscribe,()=>game.round.giftCount,()=>0);
   const position=useRef(new THREE.Vector3(0,1.15,32));
   useFrame((_,dt)=>game.advance(dt));
   return <>
