@@ -253,6 +253,24 @@ function DeliveryZone({target,delivered}:{target:CityTarget;delivered:boolean}){
  </group>;
 }
 
+function PredictedLanding({game}:{game:SoloGame}){
+ const marker=useRef<T.Group>(null);
+ useFrame(({clock})=>{
+   if(!marker.current)return;
+   const aim=game.getCityAim();
+   if(!aim){marker.current.visible=false;return;}
+   marker.current.visible=true;
+   marker.current.position.set(aim.impactX,aim.aligned?aim.target.y+.31:.3,aim.impactZ);
+   const s=1+Math.sin(clock.elapsedTime*4)*.12;
+   marker.current.scale.setScalar(s);
+   marker.current.rotation.y+=.008;
+ });
+ return <group ref={marker} visible={false}>
+   <mesh rotation-x={-Math.PI/2}><ringGeometry args={[1.4,1.9,32]}/><meshBasicMaterial color="#f2d98e" side={T.DoubleSide} toneMapped={false} transparent opacity={.9}/></mesh>
+   <mesh rotation-x={-Math.PI/2} position-y={.025}><ringGeometry args={[.35,.52,24]}/><meshBasicMaterial color="#f4f9ff" side={T.DoubleSide} toneMapped={false}/></mesh>
+   {[0,1,2,3].map(i=><mesh key={i} rotation-y={i*Math.PI/2} position={[0,.04,0]}><boxGeometry args={[.08,.08,5]}/><meshBasicMaterial color="#d1f4e9" transparent opacity={.55}/></mesh>)}
+ </group>;
+}
 function CityTargets({game}:{game:SoloGame}){
  useSyncExternalStore(game.subscribe,()=>game.round.cityDelivered,()=>0);
  return <>{CITY_TARGETS.map(target=><DeliveryZone key={target.id} target={target} delivered={game.cityDeliveredTargets.has(target.id)}/>)}</>;
@@ -358,6 +376,7 @@ export default function CityChapter({game,input,lowPower}:{game:SoloGame;input:I
    <Pedestrians mobile={lowPower}/>
    <HolidayDecor lowPower={lowPower}/>
    <CityTargets game={game}/>
+   <PredictedLanding game={game}/>
    <CityFollow game={game} input={input} lowPower={lowPower}/>
    <FallingGifts game={game}/>
    <SnowInMotion lowPower={lowPower} game={game}/>
