@@ -87,3 +87,24 @@ export const VILLAGE_GIFTS = [
   {x:-8,z:20}, {x:8,z:2}, {x:-27,z:-8}, {x:27,z:-28}, {x:3,z:-33}
 ] as const;
 export const FLIGHT_DURATION_MS = 24000;
+
+
+/** Chapter III. Distances and offsets are metres in the gameplay world. */
+export const CITY_SPEED = 15;
+export const CITY_LENGTH = 1160;
+export const CITY_CRUISE_ALTITUDE = 44;
+export const CITY_REQUIRED_DELIVERIES = 8;
+export type CityTarget = {id:number;x:number;z:number;y:number;radius:number;name:string;kind:"roof"|"street"};
+export const CITY_TARGETS: readonly CityTarget[] = [
+  {id:0,x:-21,z:-115,y:11,radius:16,name:"Toy Workshop",kind:"roof"},
+  {id:1,x:18,z:-210,y:1,radius:17,name:"Market Square",kind:"street"},
+  {id:2,x:-23,z:-310,y:17,radius:17,name:"Grand Hotel",kind:"roof"},
+  {id:3,x:22,z:-405,y:1,radius:17,name:"Lantern Avenue",kind:"street"},
+  {id:4,x:-20,z:-498,y:13,radius:17,name:"Children's Hospital",kind:"roof"},
+  {id:5,x:18,z:-592,y:1,radius:17,name:"Town Plaza",kind:"street"},
+  {id:6,x:23,z:-685,y:20,radius:17,name:"Skyline Apartments",kind:"roof"},
+  {id:7,x:-18,z:-778,y:1,radius:17,name:"Winter Market",kind:"street"},
+  {id:8,x:21,z:-875,y:15,radius:17,name:"Riverside School",kind:"roof"},
+  {id:9,x:-20,z:-968,y:1,radius:17,name:"Central Park",kind:"street"},
+  {id:10,x:22,z:-1065,y:12,radius:18,name:"Last Stop",kind:"roof"}
+] as const;
