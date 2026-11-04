@@ -1,15 +1,14 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Rescue Santa | 3D Multiplayer Christmas Adventure",
-  description: "Free Santa from the ice cage! Race through the winter wonderland, dodge evil snowmen, and melt the ice with friends.",
+  title: "Rescue Santa | Multiplayer Christmas Adventure",
+  description: "Race through a snowy winter world, dodge evil snowmen, and free Santa with friends."
 };
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  );
+export const viewport: Viewport = {
+  width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false,
+  themeColor: "#061b29"
+};
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <html lang="en"><body>{children}</body></html>;
 }

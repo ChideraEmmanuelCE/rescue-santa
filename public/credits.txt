@@ -1,0 +1,7 @@
+Rescue Santa — North Pole Expedition
+Santa Claus by William Nuñez (dobleuww), CC BY 4.0.
+https://sketchfab.com/models/bc1abd353b614173af16f6a4a2b6ab1a
+https://creativecommons.org/licenses/by/4.0/
+Changes: compressed textures, scaled skeleton, runtime locomotion and combat poses.
+Stierberg Sunrise by Grzegorz Wronkowski, Poly Haven, CC0.
+https://polyhaven.com/a/stierberg_sunrise
