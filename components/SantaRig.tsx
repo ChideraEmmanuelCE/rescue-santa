@@ -23,6 +23,20 @@ export default function SantaRig({motion,height=2.25}:{motion?:MutableRefObject<
     model.scale.setScalar(scale);
     model.position.set(-center.x*scale,-box.min.y*scale,-center.z*scale);
     const rest=new Map(Object.values(bones).map(b=>[b,b.quaternion.clone()]));
+    // Derive the relaxed shoulder pose in model space. Imported bone axes vary
+    // between the two shoulders; local Euler offsets alone leave a T-pose.
+    model.updateMatrixWorld(true);
+    for(const side of ["Left","Right"]){
+      const arm=bones[side+"Arm"],elbow=bones[side+"ForeArm"];
+      if(!arm||!elbow||!arm.parent)continue;
+      const origin=arm.getWorldPosition(new T.Vector3());
+      const direction=elbow.getWorldPosition(new T.Vector3()).sub(origin).normalize();
+      const relaxed=new T.Vector3(Math.sign(direction.x)*.22,-.965,.12).normalize();
+      const change=new T.Quaternion().setFromUnitVectors(direction,relaxed);
+      const local=arm.parent.getWorldQuaternion(new T.Quaternion()).invert()
+        .multiply(change).multiply(arm.getWorldQuaternion(new T.Quaternion()));
+      rest.set(arm,local);
+    }
     return {model,bones,rest};
   },[scene,height]);
   const phase=useRef(0), blend=useRef(0);
@@ -41,7 +55,7 @@ export default function SantaRig({motion,height=2.25}:{motion?:MutableRefObject<
     joint("LeftUpLeg",gait*.48,0,0); joint("RightUpLeg",-gait*.48,0,0);
     joint("LeftLeg",Math.max(0,-gait)*.65+(m?.airborne ? .25 : 0),0,0);
     joint("RightLeg",Math.max(0,gait)*.65,0,0);
-    joint("LeftArm",-gait*.32,0,.9);joint("RightArm",gait*.32-fire*1.25,0,-.9);
+    joint("LeftArm",-gait*.32,0,0);joint("RightArm",gait*.32-fire*1.25,0,0);
     joint("LeftForeArm",-.13,0,0);joint("RightForeArm",-.26-fire*.5,0,0);
     joint("Spine",-.04*blend.current,Math.sin(phase.current)*.045*blend.current,0);
     joint("Head",Math.sin(clock.elapsedTime*1.6)*.018,0,0);
