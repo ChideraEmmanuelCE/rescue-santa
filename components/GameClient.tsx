@@ -197,11 +197,12 @@ export default function GameClient() {
   const canInteract = !isDead && distanceToSanta <= INTERACTION_RANGE && hud.round.status === "playing";
   const isStunned = Boolean(hud.me && hud.me.stunnedUntil > game.now());
   const isCity=hud.round.status==="city";
+  const isCityLaunch=hud.round.status==="cityLaunch";
   const cityAim=isCity?game.getCityAim():null;
   const isFlight=hud.round.status==="flight";
   const isVillage=hud.round.status==="village";
   const isComplete=hud.round.status==="rescued";
-  const chapterTwo=isFlight||isVillage||isCity||isComplete;
+  const chapterTwo=isFlight||isVillage||isCityLaunch||isCity||isComplete;
 
   return (
     <main className="game-root overflow-hidden bg-[#081a23] text-white" style={{touchAction:"none"}}>
@@ -226,8 +227,8 @@ export default function GameClient() {
         <GameScene game={game} input={input} lowPower={isTouch}/>
         {!chapterTwo&&<AimRing input={input}/>}
         {isTouch && <>
-          {!isFlight&&!isCity&&<TouchCamera input={input}/>}<FloatingJoystick input={input}/>
-          <div style={{display:isFlight||isCity||isComplete?"none":undefined}} className="pointer-events-auto absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-3 z-40 flex flex-col items-end gap-3">
+          {!isFlight&&!isCity&&!isCityLaunch&&<TouchCamera input={input}/>} {!isCityLaunch&&<FloatingJoystick input={input}/>} 
+          <div style={{display:isFlight||isCity||isCityLaunch||isComplete?"none":undefined}} className="pointer-events-auto absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-3 z-40 flex flex-col items-end gap-3">
             {canInteract && <button onPointerDown={e=>{e.preventDefault();input.interacting=true;e.currentTarget.setPointerCapture(e.pointerId);game.hold(true)}}
               onPointerUp={()=>{input.interacting=false;game.hold(false)}}
               onPointerCancel={()=>{input.interacting=false;game.hold(false)}}
@@ -244,8 +245,8 @@ export default function GameClient() {
         </>}
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-between gap-2 px-3 pt-[max(1.0rem,env(safe-area-inset-top))]">
           <section className="max-w-[68%] rounded-2xl border border-white/15 bg-[#081f2d]/80 p-3 shadow-lg backdrop-blur-lg">
-            <div className="text-[12px] font-black tracking-widest">{isCity||isComplete?"✦ MIDNIGHT METROPOLIS":chapterTwo?"✦ AURORA VALLEY":"✦ RESCUE SANTA"}</div>
-            <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-white/70">{isCity||isComplete?"CHAPTER III · DELIVERY RUN":isFlight?"CHAPTER II · SLEIGH FLIGHT":chapterTwo?"CHAPTER II · "+hud.round.giftCount+"/5 GIFTS":"SOLO · ROUND "+hud.round.round}</div>
+            <div className="text-[12px] font-black tracking-widest">{isCity||isComplete?"✦ MIDNIGHT METROPOLIS":isCityLaunch?"✦ CITY DEPARTURE":chapterTwo?"✦ AURORA VALLEY":"✦ RESCUE SANTA"}</div>
+            <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-white/70">{isCity||isComplete?"CHAPTER III · DELIVERY RUN":isCityLaunch?"CHAPTER III · TAKEOFF":isFlight?"CHAPTER II · SLEIGH FLIGHT":chapterTwo?"CHAPTER II · "+hud.round.giftCount+"/5 GIFTS":"SOLO · ROUND "+hud.round.round}</div>
             <div className="mt-2 flex items-center gap-1.5"><div className="h-[6px] w-[95px] overflow-hidden rounded-full bg-[#a51f34]/40 sm:w-[150px]"><div className="h-full rounded-full bg-gradient-to-r from-red-600 via-amber-300 to-lime-300 transition-[width]" style={{width:`${isCity||isComplete?Math.min(100,hud.round.cityDelivered/CITY_REQUIRED_DELIVERIES*100):health}%`}}/></div><span className="text-[10px] font-black text-white">{isCity||isComplete?`${hud.round.cityDelivered}/${CITY_REQUIRED_DELIVERIES}`:`${health} HP`}</span></div>
           </section>
           <div className="pointer-events-auto relative">
@@ -261,7 +262,7 @@ export default function GameClient() {
           </div>
         </div>
         <div className="pointer-events-none absolute left-1/2 top-[max(.8rem,env(safe-area-inset-top))] z-20 w-[min(240px,32vw)] -translate-x-1/2">
-          <div className="rounded-full border border-white/15 bg-[#071927]/70 px-3 py-2 text-center text-[10px] font-bold text-white/90 shadow-lg backdrop-blur-lg">{isCity?(cityAim?.aligned?"DROP NOW · "+cityAim.target.name:"AIM FOR "+(cityAim?.target.name??"THE DELIVERY ZONES")):isFlight?"FLY THE SLEIGH · STEER THROUGH THE MOUNTAINS":isVillage?"FIND ALL FIVE GIFTS · "+hud.round.giftCount+"/5":isComplete?"AURORA VALLEY SAVED!":hud.round.status==="launching"?"BOARDING SANTA'S SLEIGH":hud.round.status==="escort"?(hud.round.blocked?"CLEAR THE SNOWMEN NEAR SANTA":"STAY CLOSE · ESCORT SANTA"):isStunned&&!isDead?"SNOWMAN ATTACK! FIGHT BACK":canInteract?"HOLD TO RESCUE SANTA":isDead?"YOU HAVE BEEN DEFEATED":"REACH THE ICE CAGE"}</div>
+          <div className="rounded-full border border-white/15 bg-[#071927]/70 px-3 py-2 text-center text-[10px] font-bold text-white/90 shadow-lg backdrop-blur-lg">{isCityLaunch?"NEXT STOP · MIDNIGHT METROPOLIS":isCity?(cityAim?.aligned?"DROP NOW · "+cityAim.target.name:"AIM FOR "+(cityAim?.target.name??"THE DELIVERY ZONES")):isFlight?"FLY THE SLEIGH · STEER THROUGH THE MOUNTAINS":isVillage?"FIND ALL FIVE GIFTS · "+hud.round.giftCount+"/5":isComplete?"AURORA VALLEY SAVED!":hud.round.status==="launching"?"BOARDING SANTA'S SLEIGH":hud.round.status==="escort"?(hud.round.blocked?"CLEAR THE SNOWMEN NEAR SANTA":"STAY CLOSE · ESCORT SANTA"):isStunned&&!isDead?"SNOWMAN ATTACK! FIGHT BACK":canInteract?"HOLD TO RESCUE SANTA":isDead?"YOU HAVE BEEN DEFEATED":"REACH THE ICE CAGE"}</div>
           {(isFlight||hud.round.status==="escort"||hud.round.status==="playing"&&hud.round.progress>0)&&<div className="mt-2 h-[5px] overflow-hidden rounded-full bg-black/40"><div className="h-full rounded-full bg-amber-300 transition-[width]" style={{width:`${(hud.round.status==="escort"?hud.round.escort:hud.round.progress)*100}%`}}/></div>}
         </div>
         <div className="rotate-hint">Rotate your phone for landscape play</div>
