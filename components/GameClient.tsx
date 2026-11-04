@@ -90,7 +90,7 @@ export default function GameClient() {
     return () => { game.stop(); };
   }, [game]);
 
-  const start = useCallback(() => {
+  const start = useCallback((chapter:"northPole"|"city"="northPole") => {
 
     input.reset();
     if(!graphics)return;
@@ -101,7 +101,7 @@ export default function GameClient() {
       if(root.requestFullscreen)void root.requestFullscreen().then(lock).catch(()=>{});else lock();
     }
     lastWin.current=-1;setHitText("");setDamageFlash(false);
-    game.start();
+    if(chapter==="city")game.startCityPreview();else game.start();
     setStarted(true);
   }, [input, game, graphics]);
 
@@ -187,7 +187,7 @@ export default function GameClient() {
   const [silent,setSilent]=useState(false);
   const lastWin=useRef(-1);
   useEffect(()=>{if(hud.round.status==="rescued" && lastWin.current!==hud.round.round){lastWin.current=hud.round.round;sound("clear");
-    if(game.finishTime>0 && (!best || game.finishTime<best)){setBest(game.finishTime);try{localStorage.setItem("santa-solo-best-ms",String(game.finishTime));}catch{}}
+    if(!game.startedFromCity && game.finishTime>0 && (!best || game.finishTime<best)){setBest(game.finishTime);try{localStorage.setItem("santa-solo-best-ms",String(game.finishTime));}catch{}}
   }},[hud.round,game,best]);
   useEffect(()=>{if(!hitText)return;const id=setTimeout(()=>setHitText(""),1150);return ()=>clearTimeout(id);},[hitText]);
   const distanceToSanta = hud.me ? Math.hypot(hud.me.x, hud.me.z) : Infinity;
@@ -219,6 +219,7 @@ export default function GameClient() {
 
               <button className="deploy" disabled={graphics!==true}>Start expedition <span>↗</span></button>
             </form>
+            <button type="button" onClick={()=>start("city")} disabled={graphics!==true} className="mt-4 rounded-full border border-[#f3d8a9]/50 bg-[#092737]/80 px-5 py-3 text-sm font-bold text-[#f2dcaa] shadow-xl backdrop-blur-lg disabled:opacity-40">✦ PREVIEW CHAPTER III · FLY OVER THE CITY</button>
             {graphics===false&&<p role="status" className="graphics-note">3D play needs WebGL 2. Open this link in Safari or Chrome with graphics acceleration enabled.</p>}
           </section>
           <footer className="folio"><span>90° N &nbsp; / &nbsp; ARCTIC CIRCLE</span><a href="/credits.txt" target="_blank" rel="noreferrer">ASSET CREDITS</a></footer>
