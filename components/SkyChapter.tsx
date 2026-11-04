@@ -268,8 +268,28 @@ function VillageCamera({position,input}:{position:MutableRefObject<THREE.Vector3
   return null;
 }
 
+function VillageDeparture({game}:{game:SoloGame}){
+ const {camera}=useThree();
+ const sleigh=useRef<THREE.Group>(null),focus=useRef(new THREE.Vector3(0,7,-40));
+ const from=useRef(game.now());
+ useFrame((_,dt)=>{
+   const t=THREE.MathUtils.clamp((game.now()-from.current)/4500,0,1);
+   const ease=t*t*(3-2*t);
+   const x=0,y=1.1+34*ease*ease,z=-40-96*ease*ease;
+   if(sleigh.current){
+     sleigh.current.position.lerp(new THREE.Vector3(x,y,z),1-Math.exp(-dt*8));
+     sleigh.current.rotation.x=-ease*.12;sleigh.current.rotation.z=Math.sin(t*7)*.05;
+   }
+   const desired=new THREE.Vector3(THREE.MathUtils.lerp(11,18,ease),y+5+ease*2,z+16+ease*10);
+   camera.position.lerp(desired,1-Math.exp(-dt*3));
+   focus.current.lerp(new THREE.Vector3(x,y+1,z-8),1-Math.exp(-dt*4));
+   camera.lookAt(focus.current);
+ });
+ return <group ref={sleigh} position={[0,1.1,-40]}><FlyingSleigh/></group>;
+}
 function VillageWorld({game,input,lowPower}:{game:SoloGame;input:InputController;lowPower:boolean}) {
   useSyncExternalStore(game.subscribe,()=>game.round.giftCount,()=>0);
+  const departing=useSyncExternalStore(game.subscribe,()=>game.round.status==="cityLaunch",()=>false);
   const position=useRef(new THREE.Vector3(0,1.15,32));
   useFrame((_,dt)=>game.advance(dt));
   return <>
@@ -294,7 +314,7 @@ function VillageWorld({game,input,lowPower}:{game:SoloGame;input:InputController
       <mesh rotation-x={-Math.PI/2} receiveShadow position-y={-.045}>
         <planeGeometry args={[101,101]}/><meshStandardMaterial color="#dae9e9" roughness={.94}/>
       </mesh>
-      <LocalPlayer game={game} input={input} position={position}/>
+      {!departing&&<LocalPlayer game={game} input={input} position={position}/>}
     </Physics>
     <mesh rotation-x={-Math.PI/2} position-y={-.22}><planeGeometry args={[500,500]}/><meshStandardMaterial color="#9bbbc9"/></mesh>
     <mesh rotation-x={-Math.PI/2} position={[0,.03,4]}><planeGeometry args={[9,79]}/><meshStandardMaterial color="#c7ddde" roughness={1}/></mesh>
@@ -310,12 +330,12 @@ function VillageWorld({game,input,lowPower}:{game:SoloGame;input:InputController
     <group position={[0,0,-40]}>
       <mesh position-y={.63} castShadow><boxGeometry args={[2.5,.4,3.1]}/><meshStandardMaterial color={red}/></mesh>
       <mesh position-y={.2}><boxGeometry args={[2.4,.2,4]}/><meshStandardMaterial color={gold} metalness={.65}/></mesh>
-      <group position={[2.1,0,1]}><SantaRig height={2.4}/></group>
+      {!departing&&<group position={[2.1,0,1]}><SantaRig height={2.4}/></group>}
       <Text position={[0,4.5,0]} fontSize={1.0} color="#ffe6b7" anchorX="center" anchorY="middle" outlineWidth={.055} outlineColor="#143444">AURORA VILLAGE</Text>
     </group>
     {Array.from({length:13},(_,i)=><Mountain key={i} x={(i-6)*31} z={i%2?-90:-103} radius={18+random01(i*5+2)*12} height={30+random01(i*7+4)*27} seed={i+100}/>)}
     <Snowfall count={lowPower?320:620}/>
-    <VillageCamera position={position} input={input}/>
+    {departing?<VillageDeparture game={game}/>:<VillageCamera position={position} input={input}/>}
   </>;
 }
 
