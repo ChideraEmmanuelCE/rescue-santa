@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { InputController } from "@/lib/InputController";
-import MultiplayerSync from "@/lib/MultiplayerSync";
+import SoloGame from "@/lib/SoloGame";
 import {enableSound,sound,suspendSound,setMuted} from "@/lib/sound";
 const LobbyVista=dynamic(()=>import("./LobbyVista"),{ssr:false});
 import { INTERACTION_RANGE } from "@/lib/world";
@@ -56,16 +56,15 @@ function TouchCamera({ input }: { input: InputController }) {
 }
 
 export default function GameClient() {
-  const sync = useMemo(() => new MultiplayerSync(), []);
+  const game = useMemo(() => new SoloGame(), []);
   const input = useMemo(() => new InputController(), []);
-  const hud = useSyncExternalStore(sync.subscribe, sync.getSnapshot, sync.getSnapshot);
+  const hud = useSyncExternalStore(game.subscribe, game.getSnapshot, game.getSnapshot);
   const [graphics,setGraphics]=useState<boolean|null>(null);
   const [started, setStarted] = useState(false);
-  const [name, setName] = useState("Scout");
-  const [roomCode, setRoomCode] = useState("north-pole");
+
   const [isTouch, setIsTouch] = useState(false);
   const fireFinger=useRef<{x:number;y:number}|null>(null);
-  const [copied, setCopied] = useState(false);
+
   const [lookLocked, setLookLocked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [damageFlash, setDamageFlash] = useState(false);
@@ -74,18 +73,13 @@ export default function GameClient() {
   useEffect(() => {
     const probe=document.createElement("canvas").getContext("webgl2");
     setGraphics(Boolean(probe));probe?.getExtension("WEBGL_lose_context")?.loseContext();
-    const params = new URLSearchParams(window.location.search);
-    setRoomCode((params.get("room") || "north-pole").replace(/[^a-z0-9-]/gi, "").slice(0, 24) || "north-pole");
-    setName(localStorage.getItem("rescue-santa-name") || "Scout");
+
     setIsTouch(window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0);
-    return () => { sync.disconnect(); };
-  }, [sync]);
+    return () => { game.stop(); };
+  }, [game]);
 
   const start = useCallback(() => {
-    const cleanRoom = roomCode.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24) || "north-pole";
-    const cleanName = name.trim().slice(0, 18) || "Scout";
-    localStorage.setItem("rescue-santa-name", cleanName);
-    window.history.replaceState(null, "", `?room=${encodeURIComponent(cleanRoom)}`);
+
     input.reset();
     if(!graphics)return;
     enableSound();
@@ -94,18 +88,19 @@ export default function GameClient() {
       const lock=()=>{const o=screen.orientation as ScreenOrientation & {lock?:(v:string)=>Promise<void>};void o?.lock?.("landscape").catch(()=>{});};
       if(root.requestFullscreen)void root.requestFullscreen().then(lock).catch(()=>{});else lock();
     }
-    sync.connect(cleanRoom, cleanName);
+    lastWin.current=-1;setHitText("");setDamageFlash(false);
+    game.start();
     setStarted(true);
-  }, [input, sync, roomCode, name,graphics]);
+  }, [input, game, graphics]);
 
   const exit = useCallback(() => {
     input.reset();
-    sync.send({ type: "interact", held: false });
-    sync.disconnect();
+    game.hold(false);
+    game.stop();
     if (document.pointerLockElement) document.exitPointerLock();
     suspendSound();if(document.fullscreenElement)void document.exitFullscreen().catch(()=>{});
     setStarted(false);
-  }, [input, sync]);
+  }, [input, game]);
 
   useEffect(() => {
     if (!started) return;
@@ -118,14 +113,14 @@ export default function GameClient() {
       if (e.code === "Space") input.jump();
       if (e.code === "KeyE" && !input.interacting) {
         input.interacting = true;
-        sync.send({ type: "interact", held: true });
+        game.hold(true);
       }
     };
     const keyup = (e: KeyboardEvent) => {
       input.keys.delete(e.code);if(e.code==="KeyF")input.firing=false;
       if (e.code === "KeyE") {
         input.interacting = false;
-        sync.send({ type: "interact", held: false });
+        game.hold(false);
       }
     };
     const mouseMove = (e: MouseEvent) => {
@@ -141,7 +136,7 @@ export default function GameClient() {
     const lockchange = () => {setLookLocked(Boolean(document.pointerLockElement));if(!document.pointerLockElement)input.release();};
     const loseFocus = () => {
       input.release();
-      sync.send({ type: "interact", held: false });
+      game.hold(false);
     };
     document.addEventListener("pointerlockchange", lockchange);
     window.addEventListener("keydown", keydown);
@@ -158,33 +153,27 @@ export default function GameClient() {
       window.removeEventListener("pointerdown", pointerDown);
       window.removeEventListener("blur", loseFocus);window.removeEventListener("pointerup",releaseFire);document.removeEventListener("visibilitychange",visibility);
     };
-  }, [input, sync, started, isTouch,menuOpen]);
+  }, [input, game, started, isTouch,menuOpen]);
 
-  useEffect(() => sync.onEvent((event) => {
-    if(event.type==="playerHit" && event.id===sync.myId){
+  useEffect(() => game.onEvent((event) => {
+    if(event.type==="playerHit"){
       setHitText(event.health===0?"YOU WERE DEFEATED":"-"+event.damage+" HEALTH");
       setDamageFlash(true);setTimeout(()=>setDamageFlash(false),450);
-    } else if(event.type==="enemyHit" && event.playerId===sync.myId){
+    } else if(event.type==="enemyHit"){
       sound("hit");setHitText(event.health===0?"SNOWMAN DEFEATED":"DIRECT HIT!");
     }
-  }),[sync]);
+  }),[game]);
 
   const [silent,setSilent]=useState(false);
   const lastWin=useRef(-1);
   useEffect(()=>{if(hud.round.status==="rescued" && lastWin.current!==hud.round.round){lastWin.current=hud.round.round;sound("clear");}},[hud.round]);
   useEffect(()=>{if(!hitText)return;const id=setTimeout(()=>setHitText(""),1150);return ()=>clearTimeout(id);},[hitText]);
-  const invite = async () => {
-    const url = `${window.location.origin}/?room=${encodeURIComponent(hud.room)}`;
-    try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000); }
-    catch { window.prompt("Share this room link:", url); }
-  };
   const distanceToSanta = hud.me ? Math.hypot(hud.me.x, hud.me.z) : Infinity;
   const deadUntil = hud.me?.deadUntil ?? 0;
-  const isDead = deadUntil > sync.serverNow();
+  const isDead = deadUntil > game.now();
   const health = Math.max(0, hud.me?.health ?? 100);
   const canInteract = !isDead && distanceToSanta <= INTERACTION_RANGE && hud.round.status === "playing";
-  const isStunned = Boolean(hud.me && hud.me.stunnedUntil > sync.serverNow());
-  const winner = hud.roster.find((p) => p.id === hud.round.winner);
+  const isStunned = Boolean(hud.me && hud.me.stunnedUntil > game.now());
 
   return (
     <main className="game-root overflow-hidden bg-[#081a23] text-white" style={{touchAction:"none"}}>
@@ -193,28 +182,27 @@ export default function GameClient() {
           {graphics && <LobbyVista/>}<div className="shade"/>
           <header className="mast"><i/> NORTH POLE RESCUE SERVICE <span>FIELD OPERATIONS &nbsp;/&nbsp; 01</span></header>
           <section className="brief">
-            <p className="kicker">MULTIPLAYER EXPEDITION &nbsp; / &nbsp; 01</p>
+            <p className="kicker">SOLO EXPEDITION &nbsp; / &nbsp; 01</p>
             <h1>Rescue<br/><em>Santa.</em></h1>
             <p className="story">The workshop has gone quiet. Fight through the snowmen and free Santa from the ice.</p>
             <form onSubmit={e=>{e.preventDefault();start()}}>
-              <div className="fields"><label>CALLSIGN<input value={name} maxLength={18} onChange={e=>setName(e.target.value)} autoComplete="nickname"/></label>
-              <label>ROOM CODE<input value={roomCode} maxLength={24} onChange={e=>setRoomCode(e.target.value)} autoCapitalize="none" spellCheck={false}/></label></div>
-              <button className="deploy" disabled={graphics!==true}>Join expedition <span>↗</span></button>
+
+              <button className="deploy" disabled={graphics!==true}>Start expedition <span>↗</span></button>
             </form>
             {graphics===false&&<p role="status" className="graphics-note">3D play needs WebGL 2. Open this link in Safari or Chrome with graphics acceleration enabled.</p>}
           </section>
           <footer className="folio"><span>90° N &nbsp; / &nbsp; ARCTIC CIRCLE</span><a href="/credits.txt" target="_blank" rel="noreferrer">ASSET CREDITS</a></footer>
         </div>
       ) : <>
-        <GameScene sync={sync} input={input} lowPower={isTouch}/>
+        <GameScene game={game} input={input} lowPower={isTouch}/>
         <div className="reticle" aria-hidden="true"/>
         {isTouch && <>
           <TouchCamera input={input}/><FloatingJoystick input={input}/>
           <div className="pointer-events-auto absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-3 z-40 flex flex-col items-end gap-3">
-            {canInteract && <button onPointerDown={e=>{e.preventDefault();input.interacting=true;e.currentTarget.setPointerCapture(e.pointerId);sync.send({type:"interact",held:true})}}
-              onPointerUp={()=>{input.interacting=false;sync.send({type:"interact",held:false})}}
-              onPointerCancel={()=>{input.interacting=false;sync.send({type:"interact",held:false})}}
-              onLostPointerCapture={()=>{if(input.interacting){input.interacting=false;sync.send({type:"interact",held:false})}}}
+            {canInteract && <button onPointerDown={e=>{e.preventDefault();input.interacting=true;e.currentTarget.setPointerCapture(e.pointerId);game.hold(true)}}
+              onPointerUp={()=>{input.interacting=false;game.hold(false)}}
+              onPointerCancel={()=>{input.interacting=false;game.hold(false)}}
+              onLostPointerCapture={()=>{if(input.interacting){input.interacting=false;game.hold(false)}}}
               className="h-[52px] rounded-full border border-[#fce6ab] bg-[#bd7633]/95 px-5 text-[12px] font-black tracking-wide shadow-xl active:scale-95">✦ HOLD TO RESCUE</button>}
             <div className="flex gap-2.5">
               <button aria-label="Jump" onPointerDown={e=>{e.preventDefault();input.jump()}}
@@ -227,17 +215,17 @@ export default function GameClient() {
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-between gap-2 px-3 pt-[max(1.0rem,env(safe-area-inset-top))]">
           <section className="max-w-[68%] rounded-2xl border border-white/15 bg-[#081f2d]/80 p-3 shadow-lg backdrop-blur-lg">
             <div className="text-[12px] font-black tracking-widest">✦ RESCUE SANTA</div>
-            <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-white/70"><span className={hud.status==="online"?"text-emerald-300":"text-amber-300"}>●</span>{hud.status.toUpperCase()} · R{hud.round.round} · {hud.roster.length}/12</div>
+            <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-white/70">SOLO · ROUND {hud.round.round}</div>
             <div className="mt-2 flex items-center gap-1.5"><div className="h-[6px] w-[95px] overflow-hidden rounded-full bg-[#a51f34]/40 sm:w-[150px]"><div className="h-full rounded-full bg-gradient-to-r from-red-600 via-red-400 to-lime-300 transition-[width]" style={{width:`${health}%`}}/></div><span className="text-[10px] font-black text-white">{health} HP</span></div>
           </section>
           <div className="pointer-events-auto relative">
-            <button aria-label="Game menu" onClick={()=>{input.release();sync.send({type:"interact",held:false});setMenuOpen(v=>!v)}} className="flex h-[43px] items-center gap-2 rounded-2xl border border-white/20 bg-[#081f2d]/85 px-4 text-[13px] font-black backdrop-blur-lg"><span className="text-lg">☰</span><span className="hidden sm:inline">MENU</span></button>
+            <button aria-label="Game menu" onClick={()=>{input.release();game.hold(false);setMenuOpen(v=>!v)}} className="flex h-[43px] items-center gap-2 rounded-2xl border border-white/20 bg-[#081f2d]/85 px-4 text-[13px] font-black backdrop-blur-lg"><span className="text-lg">☰</span><span className="hidden sm:inline">MENU</span></button>
             {menuOpen && <div className="absolute right-0 top-[49px] w-[215px] rounded-2xl border border-white/15 bg-[#081b2a]/95 p-4 shadow-2xl backdrop-blur-xl">
-              <div className="mb-3 text-xs font-black text-[#f0d49c]">❄ RESCUE LEADERBOARD</div>
-              <div className="space-y-1 text-[12px]">{hud.roster.map((p,i)=><div key={p.id} className="flex items-center justify-between gap-2"><span className="min-w-0 truncate" style={{color:p.color}}>{i+1}. {p.name}</span><span>{p.score} ⭐</span></div>)}</div>
+              <div className="mb-3 text-xs font-black text-[#f0d49c]">EXPEDITION STATS</div>
+              <div className="text-[12px]">Rescues: {hud.me?.score??0}</div>
               <div className="mt-3 border-t border-white/15 pt-2 text-[11px] text-white/70">Defeated: {hud.me?.kills??0} snowmen</div>
               <button className="sound-toggle" onClick={()=>{setMuted(!silent);setSilent(!silent)}}>Sound {silent?"off":"on"}</button>
-              <button onClick={invite} className="mt-3 w-full rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-xs font-black">{copied?"INVITE COPIED ✓":"COPY INVITE LINK"}</button>
+
               <button onClick={()=>{setMenuOpen(false);exit()}} className="mt-2 w-full rounded-lg border border-rose-200/25 bg-red-800/25 px-2 py-2 text-xs font-black">EXIT GAME</button>
             </div>}
           </div>
@@ -250,9 +238,9 @@ export default function GameClient() {
         {!isTouch && <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#091d2b]/75 px-4 py-2 text-[11px] font-bold text-white/80">{lookLocked?"WASD MOVE · MOUSE AIM · CLICK THROW · SPACE JUMP · E HOLD":"CLICK TO AIM · WASD MOVE · F FIRE · SPACE JUMP · E RESCUE"}</div>}
         {hitText && <div className="pointer-events-none absolute left-1/2 top-[28%] z-40 -translate-x-1/2 rounded-full border border-white/20 bg-[#092534]/85 px-6 py-3 text-[16px] font-black tracking-wide text-[#fce1b1] shadow-xl backdrop-blur-xl">{hitText}</div>}
         {damageFlash && <div className="pointer-events-none absolute inset-0 z-30 border-[9px] border-red-500/75 bg-red-700/15"/>}
-        {isDead&&<div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[#170d19]/55 p-5 backdrop-blur-sm"><div className="rounded-3xl border border-rose-300/30 bg-[#1a1424]/95 p-8 text-center shadow-2xl"><div className="text-5xl">💀</div><h2 className="mt-3 text-3xl font-black">YOU WERE DEFEATED</h2><p className="mt-2 text-sm text-white/70">Snowmen caught you. Respawning in {Math.max(1,Math.ceil((deadUntil-sync.serverNow())/1000))}s</p><p className="mt-2 text-xs text-rose-200">Use snowballs to keep them away next time.</p></div></div>}
-        {hud.round.status==="rescued" && <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[#041723]/55 p-4 backdrop-blur-sm"><div className="rounded-3xl border border-amber-200/30 bg-[#092431]/95 p-8 text-center shadow-2xl"><div className="text-5xl">🎁</div><h2 className="mt-2 text-3xl font-black text-[#f0d59f]">SANTA IS FREE!</h2><p className="mt-2 text-sm">{winner?.name||hud.round.winnerName||"An explorer"} saved Christmas!</p><p className="mt-2 text-xs text-white/65">Next round in {Math.max(1,Math.ceil((hud.round.resetAt-sync.serverNow())/1000))}s</p></div></div>}
-        {(hud.status!=="online" || hud.notice)&&<div className="pointer-events-auto absolute left-1/2 top-[34%] z-50 w-[min(350px,84vw)] -translate-x-1/2 rounded-2xl border border-white/20 bg-[#081f2d]/95 p-5 text-center shadow-2xl"><p className="text-sm font-bold">{hud.notice||"Connecting to multiplayer room…"}</p><button onClick={()=>sync.connect(roomCode,name)} className="mt-4 rounded-lg bg-[#ebd4a7] px-5 py-2 text-xs font-black text-[#142a38]">RETRY CONNECTION</button></div>}
+        {isDead&&<div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[#170d19]/55 p-5 backdrop-blur-sm"><div className="rounded-3xl border border-rose-300/30 bg-[#1a1424]/95 p-8 text-center shadow-2xl"><div className="text-5xl">💀</div><h2 className="mt-3 text-3xl font-black">YOU WERE DEFEATED</h2><p className="mt-2 text-sm text-white/70">Snowmen caught you. Respawning in {Math.max(1,Math.ceil((deadUntil-game.now())/1000))}s</p><p className="mt-2 text-xs text-rose-200">Use snowballs to keep them away next time.</p></div></div>}
+        {hud.round.status==="rescued" && <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[#041723]/55 p-4 backdrop-blur-sm"><div className="rounded-3xl border border-amber-200/30 bg-[#092431]/95 p-8 text-center shadow-2xl"><div className="text-5xl">🎁</div><h2 className="mt-2 text-3xl font-black text-[#f0d59f]">SANTA IS FREE!</h2><p className="mt-2 text-sm">You saved Christmas!</p><p className="mt-2 text-xs text-white/65">Next round in {Math.max(1,Math.ceil((hud.round.resetAt-game.now())/1000))}s</p></div></div>}
+
       </>}
     </main>
   );

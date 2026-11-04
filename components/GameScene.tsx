@@ -1,15 +1,15 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject, RefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Billboard, Html, Sky, Stars } from "@react-three/drei";
 import { CuboidCollider, Physics, RigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import MultiplayerSync from "@/lib/MultiplayerSync";
+import SoloGame from "@/lib/SoloGame";
 import { InputController } from "@/lib/InputController";
-import type { ServerMessage } from "@/lib/protocol";
-import { LocalPlayer, RemotePlayer } from "./Player";
+import type { GameEvent } from "@/lib/protocol";
+import { LocalPlayer } from "./Player";
 import SnowTrail from "./SnowTrail";
 import SantaRig from "./SantaRig";
 import WinterLight, { Powder } from "./WinterLight";
@@ -93,11 +93,11 @@ function IceBarricades(){
   </>;
 }
 
-function IceCage({ sync }: { sync: MultiplayerSync }) {
+function IceCage({ game }: { game: SoloGame }) {
   const group = useRef<THREE.Group>(null);
   useFrame((_, dt) => {
     if (!group.current) return;
-    const scale = sync.round.status === "rescued" ? .001 : 1;
+    const scale = game.round.status === "rescued" ? .001 : 1;
     group.current.scale.lerp(new THREE.Vector3(scale, scale, scale), 1 - Math.exp(-dt * 1.65));
     group.current.rotation.y += dt * .025;
   });
@@ -132,16 +132,16 @@ function IceCage({ sync }: { sync: MultiplayerSync }) {
   </group>;
 }
 
-function Snowman({ sync, id }: { sync: MultiplayerSync; id: number }) {
+function Snowman({ game, id }: { game: SoloGame; id: number }) {
   const group=useRef<THREE.Group>(null),head=useRef<THREE.Group>(null),arms=useRef<THREE.Group>(null),eyes=useRef<THREE.Group>(null);
   const heart=useRef<THREE.Group>(null);
   useFrame(({clock},dt)=>{
-    const item=sync.enemies.get(id);
+    const item=game.enemies.get(id);
     if(!group.current)return;
-    const e=item||enemyPosition(id,sync.serverNow());
-    const down=Boolean(item && item.downUntil>sync.serverNow());
-    const stunned=Boolean(item && item.stunnedUntil>sync.serverNow());
-    const attacking=Boolean(item && item.attackUntil>sync.serverNow());
+    const e=item||enemyPosition(id,game.now());
+    const down=Boolean(item && item.downUntil>game.now());
+    const stunned=Boolean(item && item.stunnedUntil>game.now());
+    const attacking=Boolean(item && item.attackUntil>game.now());
     group.current.position.lerp(new THREE.Vector3(e.x,down?-.85:Math.sin(clock.elapsedTime*3.3+id)*.055,e.z),1-Math.exp(-dt*9));
     const da=Math.atan2(Math.sin(e.yaw-group.current.rotation.y),Math.cos(e.yaw-group.current.rotation.y));
     group.current.rotation.y+=da*(1-Math.exp(-dt*9));
@@ -241,19 +241,19 @@ function IceBurst({burst,expire}:{burst:Burst;expire:(id:number)=>void}){
  useFrame(()=>{const t=(performance.now()-burst.created)/1000;if(t>.55){if(!finished.current){finished.current=true;expire(burst.key)}return;}if(ref.current){ref.current.position.copy(burst.pos);ref.current.scale.setScalar((.3+t*3.7)*(1-t/1.2));ref.current.rotation.y+=.04;}});
  return <group ref={ref}>{positions.map((v,i)=><mesh key={i} position={[v.x,v.y,v.z]} rotation={[v.z,v.x,v.y]}><octahedronGeometry args={[i%2?.08:.15,0]}/><meshBasicMaterial color={i%3===0?"#fce4bc":"#d6f6ff"} transparent opacity={.9}/></mesh>)}</group>;
 }
-function SnowballEffects({sync}:{sync:MultiplayerSync}){
+function SnowballEffects({game}:{game:SoloGame}){
  const [shots,setShots]=useState<Projectile[]>([]);
  const [bursts,setBursts]=useState<Burst[]>([]);
  const nextId=useRef(0);
- useEffect(()=>sync.onEvent((event:ServerMessage)=>{
+ useEffect(()=>game.onEvent((event:GameEvent)=>{
    if(event.type==="snowball"){
      const shot:Projectile={key:nextId.current++,x:event.x,y:event.y,z:event.z,yaw:event.yaw,created:performance.now(),hitEnemy:event.hitEnemy};
      setShots(items=>[...items.slice(-18),shot]);
    } else if(event.type==="enemyHit"){
-     const e=sync.enemies.get(event.id);
+     const e=game.enemies.get(event.id);
      if(e)setBursts(items=>[...items.slice(-10),{key:nextId.current++,pos:new THREE.Vector3(e.x,2.15,e.z),created:performance.now()}]);
    }
- }),[sync]);
+ }),[game]);
  return <>{shots.map(shot=><Snowball key={shot.key} item={shot} expire={key=>setShots(list=>list.filter(x=>x.key!==key))}/>)}
    {bursts.map(b=><IceBurst key={b.key} burst={b} expire={key=>setBursts(list=>list.filter(x=>x.key!==key))}/>)}
  </>;
@@ -269,10 +269,10 @@ function ResolutionBudget({mobile}:{mobile:boolean}){
     if(Math.abs(current-ratio)>.01){v.ratio=ratio;setDpr(ratio);}v.time=0;v.frames=0;
   });return null;
 }
-function World({ sync, input, lowPower }: { sync: MultiplayerSync; input: InputController; lowPower: boolean }) {
-  const hud = useSyncExternalStore(sync.subscribe, sync.getSnapshot, sync.getSnapshot);
+function World({ game, input, lowPower }: { game: SoloGame; input: InputController; lowPower: boolean }) {
+  useFrame((_,dt)=>game.advance(dt));
   const playerPosition = useRef(new THREE.Vector3(0, 1.15, 36.5));
-  const remoteIds = hud.roster.filter((p) => p.id !== sync.myId).map((p) => p.id);
+
   return <>
     <color attach="background" args={["#a6bac8"]} />
     <fogExp2 attach="fog" args={["#b8cdd2", .007]} />
@@ -289,27 +289,27 @@ function World({ sync, input, lowPower }: { sync: MultiplayerSync; input: InputC
             rotation={[0, theta, 0]} />;
         })}
       </RigidBody>
-      <LocalPlayer sync={sync} input={input} position={playerPosition} />
+      <LocalPlayer game={game} input={input} position={playerPosition} />
     </Physics>
-    <IceCage sync={sync} />
-    {Array.from({ length: ENEMY_COUNT }, (_, id) => <Snowman key={id} sync={sync} id={id} />)}
-    {remoteIds.map((id) => <RemotePlayer key={id} sync={sync} playerId={id} />)}
-    <SnowTrail sync={sync} position={playerPosition}/>
-    <SnowballEffects sync={sync} />
+    <IceCage game={game} />
+    {Array.from({ length: ENEMY_COUNT }, (_, id) => <Snowman key={id} game={game} id={id} />)}
+
+    <SnowTrail game={game} position={playerPosition}/>
+    <SnowballEffects game={game} />
     <Powder count={lowPower ? 600 : 1450} />
     <FollowCamera input={input} position={playerPosition} lowPower={lowPower} />
   </>;
 }
 
-export default function GameScene({ sync, input, lowPower }: {
-  sync: MultiplayerSync; input: InputController; lowPower: boolean;
+export default function GameScene({ game, input, lowPower }: {
+  game: SoloGame; input: InputController; lowPower: boolean;
 }) {
   return <div className="absolute inset-0">
     <Canvas shadows dpr={lowPower ? [1, 1.4] : [1, 1.8]}
       camera={{ position: [0, 5, 43], fov: 66, near: .1, far: 450 }}
       gl={{ antialias: !lowPower, alpha: false, powerPreference: "high-performance" }}
       onCreated={({ gl }) => { gl.outputColorSpace = THREE.SRGBColorSpace; gl.toneMapping = THREE.ACESFilmicToneMapping; gl.toneMappingExposure = 1.07; }}>
-      <Suspense fallback={null}><World sync={sync} input={input} lowPower={lowPower} /></Suspense>
+      <Suspense fallback={null}><World game={game} input={input} lowPower={lowPower} /></Suspense>
     </Canvas>
   </div>;
 }

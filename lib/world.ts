@@ -1,11 +1,10 @@
-/** Shared deterministic world data. Imported by both browser and WebSocket worker. */
+/** Collision and patrol data for the expedition. */
 export const WORLD_HALF = 46;
 export const PLAYER_SPEED = 7.1;
 export const JUMP_IMPULSE = 8.1;
 export const INTERACTION_RANGE = 4.8;
 export const RESCUE_DURATION_MS = 5000;
 export const ROUND_RESET_MS = 12000;
-export const MAX_PLAYERS = 12;
 export const ENEMY_COUNT = 7;
 
 export type Tree = { x: number; z: number; size: number };

@@ -4,19 +4,16 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/prepare-assets.mjs && node tests/room-smoke.cjs && node tests/combat-smoke.cjs && next build",
+    "build": "node scripts/prepare-assets.mjs && npm test && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "party:dev": "partykit dev",
-    "party:deploy": "partykit deploy",
-    "test:server": "node tests/room-smoke.cjs"
+    "test": "node tests/solo.cjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
     "@react-three/rapier": "^2.2.0",
     "next": "^16.4.4",
-    "partysocket": "^1.3.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "three": "^0.180.0",
@@ -28,7 +25,6 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@types/three": "^0.180.0",
-    "partykit": "^0.0.115",
     "postcss": "^8.5.0",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.9.0"

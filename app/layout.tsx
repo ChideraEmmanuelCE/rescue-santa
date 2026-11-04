@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Rescue Santa | Multiplayer Christmas Adventure",
-  description: "Race through a snowy winter world, dodge evil snowmen, and free Santa with friends."
+  title: "Rescue Santa | Solo Christmas Adventure",
+  description: "Race through a snowy winter world, dodge evil snowmen, and free Santa."
 };
 export const viewport: Viewport = {
   width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false,

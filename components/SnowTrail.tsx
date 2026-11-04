@@ -3,12 +3,12 @@ import {useRef,useMemo} from "react";
 import type {MutableRefObject} from "react";
 import {useFrame} from "@react-three/fiber";
 import * as T from "three";
-import type MultiplayerSync from "@/lib/MultiplayerSync";
+import type SoloGame from "@/lib/SoloGame";
 
 /** Recycle the oldest impressions; no geometry allocation while the players walk. */
-export default function SnowTrail({position,sync}:{position:MutableRefObject<T.Vector3>;sync:MultiplayerSync}){
+export default function SnowTrail({position,game}:{position:MutableRefObject<T.Vector3>;game:SoloGame}){
   const mesh=useRef<T.InstancedMesh>(null),cursor=useRef(0);
-  const last=useRef(new Map<string,{x:number;z:number;side:number}>());
+  const last=useRef<{x:number;z:number;side:number}|null>(null);
   const dummy=useMemo(()=>new T.Object3D(),[]);
   const texture=useMemo(()=>{
     const c=document.createElement("canvas");c.width=40;c.height=72;const g=c.getContext("2d")!;
@@ -18,18 +18,15 @@ export default function SnowTrail({position,sync}:{position:MutableRefObject<T.V
   },[]);
   useFrame(()=>{
     const m=mesh.current;if(!m)return;
-    function stamp(id:string,x:number,y:number,z:number,yaw:number){
-      const prev=last.current.get(id);if(!prev){last.current.set(id,{x,z,side:1});return;}
+    function stamp(x:number,y:number,z:number,yaw:number){
+      const prev=last.current;if(!prev){last.current={x,z,side:1};return;}
       const distance=Math.hypot(x-prev.x,z-prev.z);if(distance<.93)return;
       prev.x=x;prev.z=z;if(distance>4||y>1.4)return;
       prev.side*=-1;dummy.rotation.order="YXZ";dummy.rotation.set(-Math.PI/2,-yaw,0,"YXZ");
       dummy.position.set(x+Math.cos(yaw)*.18*prev.side,-.039,z+Math.sin(yaw)*.18*prev.side);dummy.updateMatrix();
       m!.setMatrixAt(cursor.current%128,dummy.matrix);cursor.current++;m!.count=Math.min(cursor.current,128);m!.instanceMatrix.needsUpdate=true;
     }
-    for(const p of sync.players.values()){
-      const v=p.id===sync.myId?position.current:p;stamp(p.id,v.x,v.y,v.z,p.yaw);
-    }
-    for(const id of last.current.keys())if(!sync.players.has(id))last.current.delete(id);
+    const p=game.myPlayer,v=position.current;if(p)stamp(v.x,v.y,v.z,p.yaw);
   });
   return <instancedMesh ref={mesh} args={[undefined,undefined,128]} count={0} frustumCulled={false}><planeGeometry args={[.34,.55]}/><meshBasicMaterial map={texture} transparent opacity={.26} depthWrite={false} polygonOffset polygonOffsetFactor={-1}/></instancedMesh>;
 }
