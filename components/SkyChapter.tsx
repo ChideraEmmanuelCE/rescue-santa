@@ -15,7 +15,7 @@ import { LocalPlayer } from "./Player";
 const red = "#9e2635", gold = "#d9b66c", timber = "#63412d";
 
 /** The two original North Pole characters really board the same 3D sleigh. */
-function FlyingSleigh() {
+export function FlyingSleigh() {
   const reins = useMemo(() => [-1, 1], []);
   const reindeer = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
