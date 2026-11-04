@@ -30,15 +30,17 @@ function generateTowers(mobile:boolean){
 }
 function BuildingBlocks({lowPower}:{lowPower:boolean}){
  const facades=useRef<(T.InstancedMesh|null)[]>([]);
- const amber=useRef<T.InstancedMesh>(null),blue=useRef<T.InstancedMesh>(null);
+ const amber=useRef<T.InstancedMesh>(null),blue=useRef<T.InstancedMesh>(null),snowcaps=useRef<T.InstancedMesh>(null);
  const source=useMemo(()=>{
    const towers=generateTowers(lowPower);
    const types=[[],[],[]] as T.Matrix4[][];
-   const warm:T.Matrix4[]=[],cool:T.Matrix4[]=[];
+   const warm:T.Matrix4[]=[],cool:T.Matrix4[]=[],snow:T.Matrix4[]=[];
    const dummy=new T.Object3D();
    for(const b of towers){
      dummy.position.set(b.x,b.h/2,b.z);dummy.rotation.set(0,0,0);dummy.scale.set(b.w,b.h,b.d);dummy.updateMatrix();
      types[b.style].push(dummy.matrix.clone());
+     dummy.position.set(b.x,b.h+.08,b.z);dummy.scale.set(b.w+.28,.19,b.d+.28);dummy.updateMatrix();
+     snow.push(dummy.matrix.clone());
      const vertical=Math.floor((b.h-3)/3.4),slots=lowPower?2:3;
      for(let floor=1;floor<vertical;floor++)for(let col=0;col<slots;col++){
        const lit=random01(b.seed*2+floor*31+col*7);
@@ -57,10 +59,11 @@ function BuildingBlocks({lowPower}:{lowPower:boolean}){
        }
      }
    }
-   return {types,warm,cool};
+   return {types,warm,cool,snow};
  },[lowPower]);
  useEffect(()=>{
    source.types.forEach((mats,j)=>{const m=facades.current[j];if(!m)return;mats.forEach((matrix,i)=>m.setMatrixAt(i,matrix));m.instanceMatrix.needsUpdate=true;m.computeBoundingSphere();});
+    if(snowcaps.current){source.snow.forEach((mat,i)=>snowcaps.current!.setMatrixAt(i,mat));snowcaps.current.instanceMatrix.needsUpdate=true;snowcaps.current.computeBoundingSphere();}
    for(const [m,mats] of [[amber.current,source.warm],[blue.current,source.cool]] as const){
      if(!m)continue;mats.forEach((mat,i)=>m.setMatrixAt(i,mat));m.instanceMatrix.needsUpdate=true;m.computeBoundingSphere();
    }
@@ -70,6 +73,7 @@ function BuildingBlocks({lowPower}:{lowPower:boolean}){
      <boxGeometry args={[1,1,1]}/>
      <meshStandardMaterial color={["#5c6d7e","#987b6b","#526478"][j]} roughness={.77} metalness={.13}/>
    </instancedMesh>)}
+   <instancedMesh ref={snowcaps} args={[undefined,undefined,source.snow.length]} receiveShadow><boxGeometry args={[1,1,1]}/><meshStandardMaterial color="#ccdade" roughness={.96} metalness={.02}/></instancedMesh>
    <instancedMesh ref={amber} args={[undefined,undefined,source.warm.length]}><planeGeometry args={[1,1]}/><meshBasicMaterial color="#ffcb79" toneMapped={false} side={T.DoubleSide}/></instancedMesh>
    <instancedMesh ref={blue} args={[undefined,undefined,source.cool.length]}><planeGeometry args={[1,1]}/><meshBasicMaterial color="#94c7dd" toneMapped={false} side={T.DoubleSide}/></instancedMesh>
  </>;
@@ -81,7 +85,7 @@ const lights=Array.from({length:74},(_,i)=>({x:i%2?14.2:-14.2,z:58-Math.floor(i/
 const blockProps=[-1,1];
 
 function Roadway(){
- const lane=useRef<T.InstancedMesh>(null),cross=useRef<T.InstancedMesh>(null),posts=useRef<T.InstancedMesh>(null),bulbs=useRef<T.InstancedMesh>(null);
+ const lane=useRef<T.InstancedMesh>(null),cross=useRef<T.InstancedMesh>(null),posts=useRef<T.InstancedMesh>(null),bulbs=useRef<T.InstancedMesh>(null),reflections=useRef<T.InstancedMesh>(null);
  const arrays=useMemo(()=>{
    const dummy=new T.Object3D();
    const matr=(list:{x:number;z:number}[],y:number,s:[number,number,number])=>list.map(p=>{
@@ -91,12 +95,13 @@ function Roadway(){
      marks:matr(laneMarks,.064,[.13,.01,3.65]),
      cross:matr(crossing,.075,[1.5,.014,5.1]),
      pole:matr(lights,2.7,[.11,5.4,.11]),
-     bulb:matr(lights,5.55,[.38,.24,.38])
+     bulb:matr(lights,5.55,[.38,.24,.38]),
+     reflect:lights.map(p=>{dummy.position.set(p.x*.84,.068,p.z);dummy.rotation.set(-Math.PI/2,0,0);dummy.scale.set(5.2,13,1);dummy.updateMatrix();return dummy.matrix.clone();})
    };
  },[]);
  useEffect(()=>{
-   const pairs:[[T.InstancedMesh|null,T.Matrix4[]],[T.InstancedMesh|null,T.Matrix4[]],[T.InstancedMesh|null,T.Matrix4[]],[T.InstancedMesh|null,T.Matrix4[]]]=[
-     [lane.current,arrays.marks],[cross.current,arrays.cross],[posts.current,arrays.pole],[bulbs.current,arrays.bulb]
+   const pairs:[T.InstancedMesh|null,T.Matrix4[]][]=[
+     [lane.current,arrays.marks],[cross.current,arrays.cross],[posts.current,arrays.pole],[bulbs.current,arrays.bulb],[reflections.current,arrays.reflect]
    ];
    pairs.forEach(([mesh,mats])=>{if(!mesh)return;mats.forEach((m,i)=>mesh.setMatrixAt(i,m));mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();});
  },[arrays]);
@@ -116,12 +121,13 @@ function Roadway(){
    <instancedMesh ref={cross} args={[undefined,undefined,arrays.cross.length]}><boxGeometry args={[1,1,1]}/><meshBasicMaterial color="#d4d7d1" transparent opacity={.83}/></instancedMesh>
    <instancedMesh ref={posts} args={[undefined,undefined,arrays.pole.length]}><cylinderGeometry args={[.5,.7,1,7]}/><meshStandardMaterial color="#3a4651" metalness={.65} roughness={.4}/></instancedMesh>
    <instancedMesh ref={bulbs} args={[undefined,undefined,arrays.bulb.length]}><sphereGeometry args={[1,8,6]}/><meshBasicMaterial color="#ffe5b0" toneMapped={false}/></instancedMesh>
+   <instancedMesh ref={reflections} args={[undefined,undefined,arrays.reflect.length]}><planeGeometry args={[1,1]}/><meshBasicMaterial color="#eac897" transparent opacity={.13} depthWrite={false} blending={T.AdditiveBlending} side={T.DoubleSide}/></instancedMesh>
  </>;
 }
 
 function Traffic({mobile}:{mobile:boolean}){
  const count=mobile?27:52;
- const body=useRef<T.InstancedMesh>(null),tops=useRef<T.InstancedMesh>(null),heads=useRef<T.InstancedMesh>(null),tails=useRef<T.InstancedMesh>(null);
+ const body=useRef<T.InstancedMesh>(null),tops=useRef<T.InstancedMesh>(null),heads=useRef<T.InstancedMesh>(null),tails=useRef<T.InstancedMesh>(null),wheels=useRef<T.InstancedMesh>(null);
  const cars=useMemo(()=>Array.from({length:count},(_,i)=>({
    x:[-10,-4,4,10][i%4],
    z:55-random01(i*9+35)*(CITY_LENGTH+105),
@@ -144,15 +150,23 @@ function Traffic({mobile}:{mobile:boolean}){
        const k=i*2+(s===1?1:0);
        dummy.position.set(c.x+s*.66,.74,c.z+(c.dir===1?1:-1)*2.1);dummy.scale.set(.26,.19,.13);dummy.updateMatrix();heads.current?.setMatrixAt(k,dummy.matrix);
        dummy.position.set(c.x+s*.66,.74,c.z-(c.dir===1?1:-1)*2.1);dummy.scale.set(.3,.17,.11);dummy.updateMatrix();tails.current?.setMatrixAt(k,dummy.matrix);
+       for(const b of [-1,1]){
+         const n=i*4+(s===1?2:0)+(b===1?1:0);
+         dummy.rotation.set(0,yaw,Math.PI/2);
+         dummy.position.set(c.x+s*.93,.44,c.z+b*1.25);
+         dummy.scale.set(.38,.16,.38);dummy.updateMatrix();wheels.current?.setMatrixAt(n,dummy.matrix);
+       }
+       dummy.rotation.set(0,yaw,0);
      }
    });
-   [body.current,tops.current,heads.current,tails.current].forEach(m=>{if(m)m.instanceMatrix.needsUpdate=true;});
+   [body.current,tops.current,heads.current,tails.current,wheels.current].forEach(m=>{if(m)m.instanceMatrix.needsUpdate=true;});
  });
  return <>
    <instancedMesh ref={body} args={[undefined,undefined,count]} castShadow><boxGeometry args={[1,1,1]}/><meshStandardMaterial color="#ffffff" roughness={.36} metalness={.38}/></instancedMesh>
    <instancedMesh ref={tops} args={[undefined,undefined,count]}><boxGeometry args={[1,1,1]}/><meshPhysicalMaterial color="#1a303d" roughness={.18} metalness={.58} clearcoat={.75}/></instancedMesh>
    <instancedMesh ref={heads} args={[undefined,undefined,count*2]}><boxGeometry args={[1,1,1]}/><meshBasicMaterial color="#fff6cb" toneMapped={false}/></instancedMesh>
    <instancedMesh ref={tails} args={[undefined,undefined,count*2]}><boxGeometry args={[1,1,1]}/><meshBasicMaterial color="#ec3b44" toneMapped={false}/></instancedMesh>
+   <instancedMesh ref={wheels} args={[undefined,undefined,count*4]}><cylinderGeometry args={[1,1,1,10]}/><meshStandardMaterial color="#181c22" roughness={.94}/></instancedMesh>
  </>;
 }
 
