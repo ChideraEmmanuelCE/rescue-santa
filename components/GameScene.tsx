@@ -327,7 +327,7 @@ export default function GameScene({ game, input, lowPower }: {
   game: SoloGame; input: InputController; lowPower: boolean;
 }) {
   const phase=useSyncExternalStore(game.subscribe,()=>game.round.status,()=> "playing" as const);
-  const chapterTwo=phase==="flight"||phase==="village";
+  const chapterTwo=phase==="flight"||phase==="village"||phase==="cityLaunch";
   const city=phase==="city"||phase==="rescued";
   return <div className="absolute inset-0">
     <Canvas shadows dpr={lowPower ? [1, 1.4] : [1, 1.8]}
