@@ -1,8 +1,8 @@
 import type { EnemyState, GameEvent, PlayerState, RoundState } from "./protocol";
-import { collidesWorld, enemyPosition, ENEMY_COUNT, INTERACTION_RANGE, RESCUE_DURATION_MS, ROUND_RESET_MS, spawnPosition, wallAt, SLEIGH_Z, SUPPLIES } from "./world";
+import { collidesWorld, enemyPosition, ENEMY_COUNT, INTERACTION_RANGE, RESCUE_DURATION_MS, spawnPosition, wallAt, SLEIGH_Z, SUPPLIES, VILLAGE_GIFTS, FLIGHT_DURATION_MS } from "./world";
 
 type Enemy = EnemyState & {nextAttack:number};
-const freshRound = (round:number): RoundState => ({round,status:"playing",progress:0,resetAt:0,escort:0,blocked:false});
+const freshRound = (round:number): RoundState => ({round,status:"playing",progress:0,resetAt:0,escort:0,blocked:false,giftCount:0});
 
 /** One expedition per tab. Only active scene frames advance game time. */
 export default class SoloGame {
@@ -14,8 +14,9 @@ export default class SoloGame {
   finishTime=0;
   broken=new Set<number>();
   collected=new Set<number>();
+  villageCollected=new Set<number>();
   get santaZ(){return SLEIGH_Z*this.round.escort;}
-  get playable(){return this.round.status==="playing"||this.round.status==="escort";}
+  get playable(){return this.round.status==="playing"||this.round.status==="escort"||this.round.status==="village";}
   private time=0;
   private remainder=0;
   private heldSince:number|null=null;
@@ -36,9 +37,9 @@ export default class SoloGame {
   start(){
     this.time=Date.now(); this.roundStarted=this.time;this.finishTime=0;this.remainder=0; this.round=freshRound(1);
     this.myPlayer={...spawnPosition(0),yaw:0,health:100,deadUntil:0,stunnedUntil:0,score:0,kills:0};
-    this.broken.clear();this.collected.clear();this.respawn(); this.seedEnemies(); this.publish();
+    this.broken.clear();this.collected.clear();this.villageCollected.clear();this.respawn(); this.seedEnemies(); this.publish();
   }
-  stop(){this.myPlayer=null;this.enemies.clear();this.heldSince=null;this.round=freshRound(1);this.publish();}
+  stop(){this.myPlayer=null;this.enemies.clear();this.villageCollected.clear();this.heldSince=null;this.round=freshRound(1);this.publish();}
   private respawn(){
     if(!this.myPlayer)return;
     Object.assign(this.myPlayer,spawnPosition(0),{yaw:0,health:100,deadUntil:0,stunnedUntil:0});
@@ -94,13 +95,35 @@ export default class SoloGame {
   private tick(){
     const p=this.myPlayer!;
     if(this.round.status==="launching"){
-      if(this.time>=this.round.resetAt){this.round.status="rescued";this.round.resetAt=this.time+ROUND_RESET_MS;this.finishTime=this.time-this.roundStarted;p.score++;}
+      if(this.time>=this.round.resetAt){
+        this.round.status="flight";this.round.resetAt=this.time+FLIGHT_DURATION_MS;
+        this.round.progress=0;this.enemies.clear();
+      }
       this.publish();return;
     }
-    if(this.round.status==="rescued"){
-      if(this.time>=this.round.resetAt){this.round=freshRound(this.round.round+1);this.roundStarted=this.time;this.finishTime=0;this.broken.clear();this.collected.clear();this.respawn();this.seedEnemies();}
+    if(this.round.status==="flight"){
+      this.round.progress=Math.min(1,Math.max(0,1-(this.round.resetAt-this.time)/FLIGHT_DURATION_MS));
+      if(this.time>=this.round.resetAt){
+        this.round.status="village";this.round.progress=0;
+        Object.assign(p,{x:0,y:1.15,z:32,yaw:0,deadUntil:0,stunnedUntil:0,health:100});
+        this.spawnVersion++;this.heldSince=null;
+      }
       this.publish();return;
     }
+    if(this.round.status==="village"){
+      VILLAGE_GIFTS.forEach((gift,i)=>{
+        if(!this.villageCollected.has(i) && Math.hypot(p.x-gift.x,p.z-gift.z)<2.15){
+          this.villageCollected.add(i);
+          this.round.giftCount=this.villageCollected.size;
+          this.emit({type:"gift",count:this.round.giftCount});
+        }
+      });
+      if(this.round.giftCount===VILLAGE_GIFTS.length){
+        this.round.status="rescued";this.finishTime=this.time-this.roundStarted;p.score++;
+      }
+      this.publish();return;
+    }
+    if(this.round.status==="rescued"){this.publish();return;}
     if(p.deadUntil && p.deadUntil<=this.time)this.respawn();
     for(const e of this.enemies.values()){
       if(e.downUntil>this.time||e.stunnedUntil>this.time)continue;
