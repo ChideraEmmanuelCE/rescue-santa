@@ -9,13 +9,35 @@ import * as THREE from "three";
 import { InputController } from "@/lib/InputController";
 import SoloGame from "@/lib/SoloGame";
 import { random01, VILLAGE_GIFTS } from "@/lib/world";
-import SantaRig from "./SantaRig";
+import SantaRig,{type Motion} from "./SantaRig";
 import { LocalPlayer } from "./Player";
 
 const red = "#9e2635", gold = "#d9b66c", timber = "#63412d";
 
-/** The two original North Pole characters really board the same 3D sleigh. */
-export function FlyingSleigh() {
+/** A distinct human rescue partner rides beside Santa instead of a duplicated Santa model. */
+function RescuePartner(){
+ const body=useRef<THREE.Group>(null);
+ useFrame(({clock})=>{if(body.current)body.current.rotation.z=Math.sin(clock.elapsedTime*2.6)*.025;});
+ return <group ref={body}>
+   <mesh position={[0,.76,0]} castShadow scale={[.36,.5,.29]}><sphereGeometry args={[1,14,12]}/><meshPhysicalMaterial color="#305e55" roughness={.84} clearcoat={.06}/></mesh>
+   <mesh position={[0,1.31,-.035]} castShadow scale={[.27,.30,.26]}><sphereGeometry args={[1,16,12]}/><meshStandardMaterial color="#ae8067" roughness={.88}/></mesh>
+   <mesh position={[0,1.60,0]} castShadow><sphereGeometry args={[.30,14,12]}/><meshStandardMaterial color="#334f4a" roughness={.95}/></mesh>
+   <mesh position={[0,1.77,0]}><sphereGeometry args={[.13,10,9]}/><meshStandardMaterial color="#eff5f0"/></mesh>
+   <mesh position={[0,1.12,-.29]} scale={[.37,.11,.09]}><boxGeometry args={[1,1,1]}/><meshStandardMaterial color="#d6bc89" roughness={.72}/></mesh>
+   {[-1,1].map(side=><group key={side}>
+     <mesh position={[side*.41,.74,-.13]} rotation-z={side*.3} castShadow><capsuleGeometry args={[.11,.45,4,8]}/><meshStandardMaterial color="#305e55" roughness={.88}/></mesh>
+     <mesh position={[side*.44,.39,-.27]}><sphereGeometry args={[.13,10,8]}/><meshStandardMaterial color="#b89272" roughness={.9}/></mesh>
+     <mesh position={[side*.17,.25,-.25]} rotation-x={-.68} castShadow><capsuleGeometry args={[.14,.42,4,9]}/><meshStandardMaterial color="#31404d" roughness={.85}/></mesh>
+     <mesh position={[side*.18,.14,-.65]} castShadow><boxGeometry args={[.28,.22,.52]}/><meshStandardMaterial color="#322e2c" roughness={.86}/></mesh>
+   </group>)}
+   {[-.10,.10].map(x=><mesh key={x} position={[x,1.35,-.273]} scale={[.025,.029,.021]}><sphereGeometry args={[1,8,6]}/><meshBasicMaterial color="#272a29"/></mesh>)}
+ </group>;
+}
+
+/** Passenger and Santa share a full 3D sleigh during both flight chapters. */
+export function FlyingSleigh({game}:{game?:SoloGame}) {
+ const motion=useRef<Motion>({speed:0,airborne:false,shot:-2000});
+ useEffect(()=>game?.onEvent(e=>{if(e.type==="presentDrop")motion.current.shot=performance.now();}),[game]);
   const reins = useMemo(() => [-1, 1], []);
   const reindeer = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
@@ -33,8 +55,12 @@ export function FlyingSleigh() {
     <mesh position={[0,1.25,-1.47]} castShadow><boxGeometry args={[2.02,.61,.2]}/><meshStandardMaterial color={red}/></mesh>
     {[-1,1].map(side=><mesh key={side} position={[side*.95,1.25,.2]} castShadow><boxGeometry args={[.12,.49,3.4]}/><meshStandardMaterial color={red}/></mesh>)}
     <mesh position={[0,1.92,1.85]}><boxGeometry args={[1.33,.075,.09]}/><meshStandardMaterial color={gold} metalness={.8}/></mesh>
-    <group position={[-.49,1.08,.48]} rotation-y={.11}><SantaRig height={1.55}/></group>
-    <group position={[.54,1.08,-.33]} rotation-y={-.08}><SantaRig height={1.45}/></group>
+    <group position={[-.49,1.08,.48]} rotation-y={.11}><SantaRig height={1.55} motion={motion}/></group>
+    <group position={[.54,1.08,-.33]} rotation-y={-.08}><RescuePartner/></group>
+    <group position={[-.6,1.12,1.43]}>
+      <mesh scale={[.45,.6,.39]} castShadow><sphereGeometry args={[1,14,12]}/><meshStandardMaterial color="#9b5948" roughness={.87}/></mesh>
+      <mesh position-y={.52}><torusGeometry args={[.23,.055,6,14]}/><meshStandardMaterial color="#c9a96a" metalness={.45}/></mesh>
+    </group>
     <group ref={reindeer}>
       {[-.8,.8].map((x,i)=><group key={i} position={[x,.5,-6.25]}>
         <mesh castShadow position={[0,.45,0]} scale={[.59,.55,.95]}><sphereGeometry args={[1,16,12]}/><meshStandardMaterial color="#754638" roughness={.92}/></mesh>
