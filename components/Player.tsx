@@ -21,7 +21,7 @@ export function LocalPlayer({ game, input, position }: {
   const rigid = useRef<RapierRigidBody>(null);
   const model = useRef<THREE.Group>(null);
 
-  const lastThrow = useRef(0);
+  const lastBell=useRef(0);
   const lastJump = useRef(0);
   const lastSpawn = useRef(-1);
   const motion = useRef<Motion>({speed:0,airborne:false,shot:-2000});
@@ -41,7 +41,7 @@ export function LocalPlayer({ game, input, position }: {
     }
     const p = body.translation();
     const velocity = body.linvel();
-    const frozen = !me || game.round.status !== "playing" || me.stunnedUntil > game.now() || me.deadUntil > game.now();
+    const frozen = !me || !game.playable || me.stunnedUntil > game.now() || me.deadUntil > game.now();
     const movement = frozen ? { x: 0, z: 0 } : input.getMovement();
     const s = Math.sin(input.yaw), c = Math.cos(input.yaw);
     const worldX = movement.x * c + movement.z * s;
@@ -55,10 +55,15 @@ export function LocalPlayer({ game, input, position }: {
       body.setLinvel({ x: vx, y: JUMP_IMPULSE, z: vz }, true);
       lastJump.current = performance.now(); sound("jump");
     }
-    if ((input.consumeThrow() || input.firing) && !frozen && performance.now() - lastThrow.current > 560) {
+    const shot=input.consumeThrow();
+    if(frozen)input.cancelThrow();
+    if(shot!==null && !frozen){
       game.setLocalPose(p.x,p.y,p.z,input.yaw);
-      game.fire(); sound("fire"); motion.current.shot=performance.now();
-      lastThrow.current = performance.now();
+      if(game.fire(shot)){sound("fire",shot?1:.65);motion.current.shot=performance.now();}
+    }
+    const distance=Math.hypot(p.x,p.z-game.santaZ);
+    if(!frozen && distance<30 && game.now()-lastBell.current>1500+distance*95){
+      lastBell.current=game.now();sound("bell",1-distance/35);
     }
     if (model.current) {
       const current=model.current.rotation.y;

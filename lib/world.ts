@@ -26,8 +26,9 @@ export const ICE_WALLS: IceWall[] = [
   { x: 12, z: 8, width: 8, depth: 1.7, yaw: 0.37 }
 ];
 
-export function collidesWall(x: number, z: number, padding = 0.6) {
-  return ICE_WALLS.some((wall) => {
+export function wallAt(x:number,z:number,padding=.6,broken?:ReadonlySet<number>) {
+  return ICE_WALLS.findIndex((wall,i) => {
+    if(broken?.has(i))return false;
     const dx = x - wall.x;
     const dz = z - wall.z;
     const c = Math.cos(wall.yaw);
@@ -38,6 +39,11 @@ export function collidesWall(x: number, z: number, padding = 0.6) {
   });
 }
 
+export function collidesWall(x:number,z:number,padding=.6,broken?:ReadonlySet<number>){
+  return wallAt(x,z,padding,broken)>=0;
+}
+export const SLEIGH_Z=-14;
+export const SUPPLIES=[{x:2,z:31},{x:-6,z:9},{x:4,z:-9}];
 export const TREES: Tree[] = (() => {
   const trees: Tree[] = [];
   for (let i = 0; i < 285 && trees.length < 46; i++) {
@@ -52,11 +58,11 @@ export const TREES: Tree[] = (() => {
   return trees;
 })();
 
-export function collidesWorld(x: number, z: number, padding = 0.55) {
+export function collidesWorld(x: number, z: number, padding = 0.55, broken?:ReadonlySet<number>) {
   // The circular ice cage is solid until the end-of-round celebration.
   if (Math.hypot(x, z) < 3.56 + padding) return true;
   if (Math.abs(x) > WORLD_HALF - 2 - padding || Math.abs(z) > WORLD_HALF - 2 - padding) return true;
-  if (collidesWall(x, z, padding)) return true;
+  if (collidesWall(x, z, padding,broken)) return true;
   if (TREES.some((t) => Math.hypot(x - t.x, z - t.z) < t.size * 0.6 + padding)) return true;
   return false;
 }

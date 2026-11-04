@@ -20,3 +20,6 @@ button { touch-action: manipulation; cursor: pointer; }
 @media(orientation:portrait){.brief{width:86%;margin-left:7%;top:59%}.brief h1{font-size:75px}.shade{background:linear-gradient(0deg,#091d2b 5%,#0b202de5 46%,#10233044 92%)}.mast span{display:none}.rotate-hint{display:block;position:absolute;top:25%;left:50%;transform:translateX(-50%);color:white;background:#102637df;padding:7px 12px;border-radius:20px;text-align:center;font:12px system-ui;pointer-events:none}.vista{right:-24%;left:-35%}}
 
 .graphics-note{color:#fff2cd;font:13px/1.5 system-ui;margin-top:10px}.deploy:disabled{opacity:.65;cursor:default}.lobby{background:#183342 radial-gradient(ellipse at 83% 30%,#91a6af,transparent 50%);}
+
+.reticle[data-active=true]::after{content:"";position:absolute;width:32px;height:32px;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);background:conic-gradient(#ffcf80 var(--charge),#152c3e80 0);mask:radial-gradient(transparent 55%,#000 58%);-webkit-mask:radial-gradient(transparent 55%,#000 58%)}
+.exp-best{font:600 12px system-ui;color:#ffe0ad;margin:0 0 8px}
