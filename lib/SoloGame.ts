@@ -61,7 +61,7 @@ export default class SoloGame {
   }
   fire(heavy=false){
     const p=this.myPlayer;
-    if(!p||p.deadUntil||p.stunnedUntil>this.time|| !this.playable||this.time-this.lastThrow<350)return false;
+    if(!p||p.deadUntil||p.stunnedUntil>this.time|| !["playing","escort"].includes(this.round.status)||this.time-this.lastThrow<350)return false;
     this.lastThrow=this.time;
     const fx=Math.sin(p.yaw),fz=-Math.cos(p.yaw);
     let hit:Enemy|undefined,nearest=19.5;
