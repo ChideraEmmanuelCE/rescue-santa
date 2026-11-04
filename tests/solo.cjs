@@ -65,7 +65,10 @@ for(const [i,target] of CITY_TARGETS.slice(0,CITY_REQUIRED_DELIVERIES).entries()
 assert.equal(game.round.status,"rescued");assert.equal(game.myPlayer.score,1);assert(game.finishTime>0);
 assert.equal(events.filter(e=>e.type==="presentLanded"&&e.hit).length,CITY_REQUIRED_DELIVERIES);
 advance(12000);assert.equal(game.round.round,1);assert.equal(game.round.status,"rescued");
-game.stop();assert.equal(game.myPlayer,null);game.start();assert.equal(game.myPlayer.score,0);
+game.stop();assert.equal(game.myPlayer,null);game.startCityPreview();
+assert.equal(game.startedFromCity,true);assert.equal(game.round.status,"city");
+assert.equal(game.round.cityDelivered,0);
+game.start();assert.equal(game.startedFromCity,false);assert.equal(game.myPlayer.score,0);
 // The first south barricade lies directly between the scout and the target.
 for(const e of game.enemies.values())e.downUntil=game.now()+60000;
 const target=game.enemies.get(4);target.downUntil=0;target.x=6;target.z=20;
