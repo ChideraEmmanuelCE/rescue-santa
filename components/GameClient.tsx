@@ -168,7 +168,8 @@ export default function GameClient() {
   }, [input, game, started, isTouch,menuOpen]);
 
   useEffect(() => game.onEvent((event) => {
-    if(event.type==="supply"){sound("bell");setHitText("WARMTH KIT · HEALTH RESTORED");}
+    if(event.type==="gift"){sound("clear");setHitText("MAGIC GIFT RECOVERED · "+event.count+"/5");}
+    else if(event.type==="supply"){sound("bell");setHitText("WARMTH KIT · HEALTH RESTORED");}
     else if(event.type==="shatter"){sound("hit");setHitText("ICE SHATTERED");}
     else if(event.type==="playerHit"){
       setHitText(event.health===0?"YOU WERE DEFEATED":"-"+event.damage+" HEALTH");
@@ -190,6 +191,10 @@ export default function GameClient() {
   const health = Math.max(0, hud.me?.health ?? 100);
   const canInteract = !isDead && distanceToSanta <= INTERACTION_RANGE && hud.round.status === "playing";
   const isStunned = Boolean(hud.me && hud.me.stunnedUntil > game.now());
+  const isFlight=hud.round.status==="flight";
+  const isVillage=hud.round.status==="village";
+  const isComplete=hud.round.status==="rescued";
+  const chapterTwo=isFlight||isVillage||isComplete;
 
   return (
     <main className="game-root overflow-hidden bg-[#081a23] text-white" style={{touchAction:"none"}}>
@@ -200,7 +205,7 @@ export default function GameClient() {
           <section className="brief">
             <p className="kicker">SOLO EXPEDITION &nbsp; / &nbsp; 01</p>
             <h1>Rescue<br/><em>Santa.</em></h1>
-            <p className="story">Follow the lanterns to the ice cage. Pack a snowball to shatter cover, then guard Santa all the way to his sleigh.</p>
+            <p className="story">Follow the lanterns to the ice cage. Pack a snowball to shatter cover, then guard Santa to his sleigh. Fly together over the mountains to Aurora Village and recover five magical presents.</p>
             {best>0&&<p className="exp-best">Personal best · {clockText(best)}</p>}
             <form onSubmit={e=>{e.preventDefault();start()}}>
 
@@ -212,10 +217,10 @@ export default function GameClient() {
         </div>
       ) : <>
         <GameScene game={game} input={input} lowPower={isTouch}/>
-        <AimRing input={input}/>
+        {!chapterTwo&&<AimRing input={input}/>}
         {isTouch && <>
-          <TouchCamera input={input}/><FloatingJoystick input={input}/>
-          <div className="pointer-events-auto absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-3 z-40 flex flex-col items-end gap-3">
+          {!isFlight&&<TouchCamera input={input}/>}<FloatingJoystick input={input}/>
+          <div style={{display:isFlight||isComplete?"none":undefined}} className="pointer-events-auto absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-3 z-40 flex flex-col items-end gap-3">
             {canInteract && <button onPointerDown={e=>{e.preventDefault();input.interacting=true;e.currentTarget.setPointerCapture(e.pointerId);game.hold(true)}}
               onPointerUp={()=>{input.interacting=false;game.hold(false)}}
               onPointerCancel={()=>{input.interacting=false;game.hold(false)}}
@@ -224,22 +229,22 @@ export default function GameClient() {
             <div className="flex gap-2.5">
               <button aria-label="Jump" onPointerDown={e=>{e.preventDefault();input.jump()}}
                 className="grid h-[64px] w-[64px] place-content-center rounded-full border border-white/35 bg-[#0a2939]/85 shadow-lg backdrop-blur-lg active:scale-95"><span className="text-[24px] leading-6">↑</span><span className="text-[9px] font-black tracking-widest">JUMP</span></button>
-              <button aria-label="Throw snowball" onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);input.beginThrow();sound("charge");fireFinger.current={x:e.clientX,y:e.clientY}}} onPointerMove={e=>{const f=fireFinger.current;if(input.firing&&f&&e.currentTarget.hasPointerCapture(e.pointerId)){input.pan(e.clientX-f.x,e.clientY-f.y);f.x=e.clientX;f.y=e.clientY;}}} onPointerUp={()=>{input.endThrow();fireFinger.current=null}} onLostPointerCapture={()=>{if(fireFinger.current){input.cancelThrow();fireFinger.current=null;}}} onPointerCancel={()=>{input.cancelThrow();fireFinger.current=null}}
-                className="grid h-[75px] w-[75px] place-content-center rounded-full border border-[#fce0a5]/65 bg-[#174457]/95 shadow-[0_4px_28px_#f6dfa845] backdrop-blur-lg active:scale-95"><span className="text-[29px] leading-7">❄</span><span className="text-[10px] font-black tracking-wide">THROW</span><span className="text-[8px]">Hold to pack</span></button>
+              {!isVillage&&<button aria-label="Throw snowball" onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);input.beginThrow();sound("charge");fireFinger.current={x:e.clientX,y:e.clientY}}} onPointerMove={e=>{const f=fireFinger.current;if(input.firing&&f&&e.currentTarget.hasPointerCapture(e.pointerId)){input.pan(e.clientX-f.x,e.clientY-f.y);f.x=e.clientX;f.y=e.clientY;}}} onPointerUp={()=>{input.endThrow();fireFinger.current=null}} onLostPointerCapture={()=>{if(fireFinger.current){input.cancelThrow();fireFinger.current=null;}}} onPointerCancel={()=>{input.cancelThrow();fireFinger.current=null}}
+                className="grid h-[75px] w-[75px] place-content-center rounded-full border border-[#fce0a5]/65 bg-[#174457]/95 shadow-[0_4px_28px_#f6dfa845] backdrop-blur-lg active:scale-95"><span className="text-[29px] leading-7">❄</span><span className="text-[10px] font-black tracking-wide">THROW</span><span className="text-[8px]">Hold to pack</span></button>}
             </div>
           </div>
         </>}
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-between gap-2 px-3 pt-[max(1.0rem,env(safe-area-inset-top))]">
           <section className="max-w-[68%] rounded-2xl border border-white/15 bg-[#081f2d]/80 p-3 shadow-lg backdrop-blur-lg">
-            <div className="text-[12px] font-black tracking-widest">✦ RESCUE SANTA</div>
-            <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-white/70">SOLO · ROUND {hud.round.round}</div>
+            <div className="text-[12px] font-black tracking-widest">{chapterTwo?"✦ AURORA VALLEY":"✦ RESCUE SANTA"}</div>
+            <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-white/70">{isFlight?"CHAPTER II · SLEIGH FLIGHT":chapterTwo?"CHAPTER II · "+hud.round.giftCount+"/5 GIFTS":"SOLO · ROUND "+hud.round.round}</div>
             <div className="mt-2 flex items-center gap-1.5"><div className="h-[6px] w-[95px] overflow-hidden rounded-full bg-[#a51f34]/40 sm:w-[150px]"><div className="h-full rounded-full bg-gradient-to-r from-red-600 via-red-400 to-lime-300 transition-[width]" style={{width:`${health}%`}}/></div><span className="text-[10px] font-black text-white">{health} HP</span></div>
           </section>
           <div className="pointer-events-auto relative">
             <button aria-label="Game menu" onClick={()=>{input.release();game.hold(false);setMenuOpen(v=>!v)}} className="flex h-[43px] items-center gap-2 rounded-2xl border border-white/20 bg-[#081f2d]/85 px-4 text-[13px] font-black backdrop-blur-lg"><span className="text-lg">☰</span><span className="hidden sm:inline">MENU</span></button>
             {menuOpen && <div className="absolute right-0 top-[49px] w-[215px] rounded-2xl border border-white/15 bg-[#081b2a]/95 p-4 shadow-2xl backdrop-blur-xl">
               <div className="mb-3 text-xs font-black text-[#f0d49c]">EXPEDITION STATS</div>
-              <div className="text-[12px]">Rescues: {hud.me?.score??0} · Ice walls broken: {game.broken.size}</div>
+              <div className="text-[12px]">Rescues: {hud.me?.score??0} · Magic gifts: {hud.round.giftCount}/5</div>
               <div className="mt-3 border-t border-white/15 pt-2 text-[11px] text-white/70">Defeated: {hud.me?.kills??0} snowmen</div>
               <button className="sound-toggle" onClick={()=>{setMuted(!silent);setSilent(!silent)}}>Sound {silent?"off":"on"}</button>
 
@@ -248,15 +253,15 @@ export default function GameClient() {
           </div>
         </div>
         <div className="pointer-events-none absolute left-1/2 top-[max(.8rem,env(safe-area-inset-top))] z-20 w-[min(240px,32vw)] -translate-x-1/2">
-          <div className="rounded-full border border-white/15 bg-[#071927]/70 px-3 py-2 text-center text-[10px] font-bold text-white/90 shadow-lg backdrop-blur-lg">{hud.round.status==="launching"?"SLEIGH AWAY":hud.round.status==="escort"?(hud.round.blocked?"CLEAR THE SNOWMEN NEAR SANTA":"STAY CLOSE · ESCORT SANTA"):isStunned&&!isDead?"SNOWMAN ATTACK! FIGHT BACK":canInteract?"HOLD TO RESCUE SANTA":isDead?"YOU HAVE BEEN DEFEATED":"REACH THE ICE CAGE"}</div>
-          {(hud.round.status==="escort"||hud.round.status==="playing"&&hud.round.progress>0)&&<div className="mt-2 h-[5px] overflow-hidden rounded-full bg-black/40"><div className="h-full rounded-full bg-amber-300 transition-[width]" style={{width:`${(hud.round.status==="escort"?hud.round.escort:hud.round.progress)*100}%`}}/></div>}
+          <div className="rounded-full border border-white/15 bg-[#071927]/70 px-3 py-2 text-center text-[10px] font-bold text-white/90 shadow-lg backdrop-blur-lg">{isFlight?"FLY THE SLEIGH · STEER THROUGH THE MOUNTAINS":isVillage?"FIND ALL FIVE GIFTS · "+hud.round.giftCount+"/5":isComplete?"AURORA VALLEY SAVED!":hud.round.status==="launching"?"BOARDING SANTA'S SLEIGH":hud.round.status==="escort"?(hud.round.blocked?"CLEAR THE SNOWMEN NEAR SANTA":"STAY CLOSE · ESCORT SANTA"):isStunned&&!isDead?"SNOWMAN ATTACK! FIGHT BACK":canInteract?"HOLD TO RESCUE SANTA":isDead?"YOU HAVE BEEN DEFEATED":"REACH THE ICE CAGE"}</div>
+          {(isFlight||hud.round.status==="escort"||hud.round.status==="playing"&&hud.round.progress>0)&&<div className="mt-2 h-[5px] overflow-hidden rounded-full bg-black/40"><div className="h-full rounded-full bg-amber-300 transition-[width]" style={{width:`${(hud.round.status==="escort"?hud.round.escort:hud.round.progress)*100}%`}}/></div>}
         </div>
         <div className="rotate-hint">Rotate your phone for landscape play</div>
-        {!isTouch && <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#091d2b]/75 px-4 py-2 text-[11px] font-bold text-white/80">{lookLocked?"WASD MOVE · MOUSE AIM · HOLD & RELEASE TO THROW · SPACE JUMP · E HOLD":"CLICK TO AIM · WASD MOVE · F FIRE · SPACE JUMP · E RESCUE"}</div>}
+        {!isTouch && <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#091d2b]/75 px-4 py-2 text-[11px] font-bold text-white/80">{isFlight?"WASD / ARROW KEYS TO STEER SANTA'S SLEIGH":isVillage?"WASD MOVE · MOUSE TO LOOK · COLLECT ALL FIVE GIFTS":lookLocked?"WASD MOVE · MOUSE AIM · HOLD & RELEASE TO THROW · SPACE JUMP · E HOLD":"CLICK TO AIM · WASD MOVE · F FIRE · SPACE JUMP · E RESCUE"}</div>}
         {hitText && <div className="pointer-events-none absolute left-1/2 top-[28%] z-40 -translate-x-1/2 rounded-full border border-white/20 bg-[#092534]/85 px-6 py-3 text-[16px] font-black tracking-wide text-[#fce1b1] shadow-xl backdrop-blur-xl">{hitText}</div>}
         {damageFlash && <div className="pointer-events-none absolute inset-0 z-30 border-[9px] border-red-500/75 bg-red-700/15"/>}
         {isDead&&<div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[#170d19]/55 p-5 backdrop-blur-sm"><div className="rounded-3xl border border-rose-300/30 bg-[#1a1424]/95 p-8 text-center shadow-2xl"><div className="text-5xl">💀</div><h2 className="mt-3 text-3xl font-black">YOU WERE DEFEATED</h2><p className="mt-2 text-sm text-white/70">Snowmen caught you. Respawning in {Math.max(1,Math.ceil((deadUntil-game.now())/1000))}s</p><p className="mt-2 text-xs text-rose-200">Use snowballs to keep them away next time.</p></div></div>}
-        {hud.round.status==="rescued" && <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[#041723]/55 p-4 backdrop-blur-sm"><div className="rounded-3xl border border-amber-200/30 bg-[#092431]/95 p-8 text-center shadow-2xl"><div className="text-5xl">🎁</div><h2 className="mt-2 text-3xl font-black text-[#f0d59f]">SANTA IS FREE!</h2><p className="mt-2 text-sm">Flight time {clockText(game.finishTime)} · Best {clockText(best||game.finishTime)}</p><p className="mt-2 text-xs text-white/65">Next round in {Math.max(1,Math.ceil((hud.round.resetAt-game.now())/1000))}s</p></div></div>}
+        {isComplete && <div className="pointer-events-auto absolute inset-0 z-40 grid place-items-center bg-[#041723]/65 p-4 backdrop-blur-md"><div className="max-w-[400px] rounded-3xl border border-amber-200/35 bg-[#092431]/95 p-8 text-center shadow-2xl"><div className="text-5xl">🎁</div><p className="mt-3 text-xs font-bold tracking-[.25em] text-amber-200">CHAPTER II COMPLETE</p><h2 className="mt-2 text-3xl font-black text-[#f0d59f]">AURORA VILLAGE SAVED!</h2><p className="mt-2 text-sm text-white/80">You rescued Santa, flew together through the mountain pass, and recovered all five magic presents.</p><p className="mt-3 text-xs text-white/65">Adventure time {clockText(game.finishTime)} · Best {clockText(best||game.finishTime)}</p><button onClick={()=>{setMenuOpen(false);start()}} className="mt-6 w-full rounded-full bg-[#edcd8b] px-6 py-3 text-sm font-black text-[#122b34] shadow-lg">PLAY AGAIN ↗</button><button onClick={exit} className="mt-3 w-full rounded-full border border-white/20 px-6 py-2 text-xs font-bold text-white/80">EXIT TO MENU</button></div></div>}
 
       </>}
     </main>
