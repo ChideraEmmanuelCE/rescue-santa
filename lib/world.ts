@@ -81,3 +81,9 @@ export function enemyPosition(index: number, timeMs: number) {
   const z = Math.cos(phase) * radius + Math.sin(phase * 1.7 + i) * 2.3;
   return { x, z, yaw: Math.atan2(Math.cos(phase), Math.sin(phase)) };
 }
+
+/** Locations of the five interactive deliveries in Chapter II's Aurora Village. */
+export const VILLAGE_GIFTS = [
+  {x:-8,z:20}, {x:8,z:2}, {x:-27,z:-8}, {x:27,z:-28}, {x:3,z:-33}
+] as const;
+export const FLIGHT_DURATION_MS = 24000;
