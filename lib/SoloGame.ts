@@ -12,6 +12,7 @@ export default class SoloGame {
   spawnVersion=0;
   roundStarted=0;
   finishTime=0;
+  startedFromCity=false;
   broken=new Set<number>();
   collected=new Set<number>();
   villageCollected=new Set<number>();
@@ -40,9 +41,19 @@ export default class SoloGame {
   }
   private emit(event:GameEvent){for(const fn of this.effects)fn(event);}
   start(){
-    this.time=Date.now(); this.roundStarted=this.time;this.finishTime=0;this.remainder=0; this.round=freshRound(1);
+    this.time=Date.now(); this.roundStarted=this.time;this.finishTime=0;this.startedFromCity=false;this.remainder=0; this.round=freshRound(1);
     this.myPlayer={...spawnPosition(0),yaw:0,health:100,deadUntil:0,stunnedUntil:0,score:0,kills:0};
     this.broken.clear();this.collected.clear();this.villageCollected.clear();this.cityDeliveredTargets.clear();this.cityPending=[];this.lastCityDrop=-Infinity;this.citySteer={x:0,z:0};this.cityDropSerial=0;this.respawn(); this.seedEnemies(); this.publish();
+  }
+  /** Owner-friendly instant city preview; it never replaces or resets the adventure. */
+  startCityPreview(){
+    this.start();
+    this.startedFromCity=true;
+    this.round.status="city";this.round.cityDistance=0;this.round.cityX=0;this.round.cityAltitude=0;
+    this.round.cityDelivered=0;this.round.cityAttempts=0;this.round.cityPass=1;
+    this.enemies.clear();
+    this.emit({type:"cityStarted"});
+    this.publish();
   }
   stop(){this.myPlayer=null;this.enemies.clear();this.villageCollected.clear();this.cityDeliveredTargets.clear();this.cityPending=[];this.citySteer={x:0,z:0};this.heldSince=null;this.round=freshRound(1);this.publish();}
   private respawn(){
