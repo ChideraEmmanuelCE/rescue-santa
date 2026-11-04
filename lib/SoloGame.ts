@@ -152,6 +152,10 @@ export default class SoloGame {
       }
       this.publish();return;
     }
+    if(this.round.status==="cityLaunch"){
+      if(this.time>=this.round.resetAt){this.round.status="city";this.emit({type:"cityStarted"});}
+      this.publish();return;
+    }
     if(this.round.status==="village"){
       VILLAGE_GIFTS.forEach((gift,i)=>{
         if(!this.villageCollected.has(i) && Math.hypot(p.x-gift.x,p.z-gift.z)<2.15){
@@ -161,11 +165,10 @@ export default class SoloGame {
         }
       });
       if(this.round.giftCount===VILLAGE_GIFTS.length){
-        this.round.status="city";
+        this.round.status="cityLaunch";this.round.resetAt=this.time+4500;
         this.round.cityDistance=0;this.round.cityX=0;this.round.cityAltitude=0;
         this.round.cityDelivered=0;this.round.cityAttempts=0;this.round.cityPass=1;
         this.citySteer={x:0,z:0};this.cityDeliveredTargets.clear();this.cityPending=[];
-        this.emit({type:"cityStarted"});
       }
       this.publish();return;
     }
