@@ -1,8 +1,8 @@
 import type { EnemyState, GameEvent, PlayerState, RoundState } from "./protocol";
-import { collidesWorld, enemyPosition, ENEMY_COUNT, INTERACTION_RANGE, RESCUE_DURATION_MS, spawnPosition, wallAt, SLEIGH_Z, SUPPLIES, VILLAGE_GIFTS, FLIGHT_DURATION_MS } from "./world";
+import { collidesWorld, enemyPosition, ENEMY_COUNT, INTERACTION_RANGE, RESCUE_DURATION_MS, spawnPosition, wallAt, SLEIGH_Z, SUPPLIES, VILLAGE_GIFTS, FLIGHT_DURATION_MS, CITY_TARGETS, CITY_SPEED, CITY_LENGTH, CITY_CRUISE_ALTITUDE, CITY_REQUIRED_DELIVERIES } from "./world";
 
 type Enemy = EnemyState & {nextAttack:number};
-const freshRound = (round:number): RoundState => ({round,status:"playing",progress:0,resetAt:0,escort:0,blocked:false,giftCount:0});
+const freshRound = (round:number): RoundState => ({round,status:"playing",progress:0,resetAt:0,escort:0,blocked:false,giftCount:0,cityDistance:0,cityX:0,cityAltitude:0,cityDelivered:0,cityAttempts:0,cityPass:1});
 
 /** One expedition per tab. Only active scene frames advance game time. */
 export default class SoloGame {
@@ -15,6 +15,11 @@ export default class SoloGame {
   broken=new Set<number>();
   collected=new Set<number>();
   villageCollected=new Set<number>();
+  cityDeliveredTargets=new Set<number>();
+  private cityPending:{at:number;targetId:number|null}[]=[];
+  private lastCityDrop=-Infinity;
+  private citySteer={x:0,z:0};
+  private cityDropSerial=0;
   get santaZ(){return SLEIGH_Z*this.round.escort;}
   get playable(){return this.round.status==="playing"||this.round.status==="escort"||this.round.status==="village";}
   private time=0;
@@ -37,9 +42,9 @@ export default class SoloGame {
   start(){
     this.time=Date.now(); this.roundStarted=this.time;this.finishTime=0;this.remainder=0; this.round=freshRound(1);
     this.myPlayer={...spawnPosition(0),yaw:0,health:100,deadUntil:0,stunnedUntil:0,score:0,kills:0};
-    this.broken.clear();this.collected.clear();this.villageCollected.clear();this.respawn(); this.seedEnemies(); this.publish();
+    this.broken.clear();this.collected.clear();this.villageCollected.clear();this.cityDeliveredTargets.clear();this.cityPending=[];this.lastCityDrop=-Infinity;this.citySteer={x:0,z:0};this.cityDropSerial=0;this.respawn(); this.seedEnemies(); this.publish();
   }
-  stop(){this.myPlayer=null;this.enemies.clear();this.villageCollected.clear();this.heldSince=null;this.round=freshRound(1);this.publish();}
+  stop(){this.myPlayer=null;this.enemies.clear();this.villageCollected.clear();this.cityDeliveredTargets.clear();this.cityPending=[];this.citySteer={x:0,z:0};this.heldSince=null;this.round=freshRound(1);this.publish();}
   private respawn(){
     if(!this.myPlayer)return;
     Object.assign(this.myPlayer,spawnPosition(0),{yaw:0,health:100,deadUntil:0,stunnedUntil:0});
@@ -53,6 +58,43 @@ export default class SoloGame {
   }
   setLocalPose(x:number,y:number,z:number,yaw:number){
     if(this.myPlayer)Object.assign(this.myPlayer,{x,y,z,yaw});
+  }
+  /** Analog input is sampled at 10Hz by the deterministic simulation. */
+  setCitySteering(x:number,z:number){
+    this.citySteer.x=Math.max(-1,Math.min(1,x));
+    this.citySteer.z=Math.max(-1,Math.min(1,z));
+  }
+  getCityAim(){
+    if(this.round.status!=="city")return null;
+    const altitude=CITY_CRUISE_ALTITUDE+this.round.cityAltitude;
+    const r=this.round;
+    const wind=Math.sin(r.cityDistance*.009)*1.6;
+    let closest:{target:(typeof CITY_TARGETS)[number];distance:number;impactX:number;impactZ:number;flightMs:number}|null=null;
+    for(const target of CITY_TARGETS){
+      if(this.cityDeliveredTargets.has(target.id)||this.cityPending.some(d=>d.targetId===target.id))continue;
+      const flight=Math.sqrt(Math.max(1,2*(altitude-target.y)/9.81));
+      const impactX=r.cityX+wind*flight*.38;
+      const impactZ=-(r.cityDistance+CITY_SPEED*flight);
+      const distance=Math.hypot((impactX-target.x),(impactZ-target.z));
+      if(!closest||distance<closest.distance)closest={target,distance,impactX,impactZ,flightMs:flight*1000};
+    }
+    return closest?{...closest,aligned:closest.distance<=closest.target.radius}:null;
+  }
+  /** Ballistic gift throw: inherit sleigh forward speed, apply gravity and modest crosswind. */
+  dropPresent(){
+    if(this.round.status!=="city"||!this.myPlayer||this.time-this.lastCityDrop<650)return false;
+    this.lastCityDrop=this.time;
+    const r=this.round,aim=this.getCityAim();
+    const hit=Boolean(aim?.aligned);
+    const flight=hit?aim!.flightMs:Math.sqrt(2*(CITY_CRUISE_ALTITUDE+r.cityAltitude)/9.81)*1000;
+    const impactX=hit?aim!.impactX:r.cityX+Math.sin(r.cityDistance*.009)*1.6*(flight/1000)*.38;
+    const impactZ=hit?aim!.impactZ:-(r.cityDistance+CITY_SPEED*flight/1000);
+    const impactY=hit?aim!.target.y:0.35;
+    const id=hit?aim!.target.id:null;
+    this.cityPending.push({at:this.time+flight,targetId:id});
+    r.cityAttempts++;
+    this.emit({type:"presentDrop",key:++this.cityDropSerial,x:r.cityX,y:CITY_CRUISE_ALTITUDE+r.cityAltitude,z:-r.cityDistance,impactX,impactY,impactZ,flightMs:flight,hit});
+    this.publish();return true;
   }
   hold(held:boolean){
     const p=this.myPlayer;
@@ -119,7 +161,33 @@ export default class SoloGame {
         }
       });
       if(this.round.giftCount===VILLAGE_GIFTS.length){
-        this.round.status="rescued";this.finishTime=this.time-this.roundStarted;p.score++;
+        this.round.status="city";
+        this.round.cityDistance=0;this.round.cityX=0;this.round.cityAltitude=0;
+        this.round.cityDelivered=0;this.round.cityAttempts=0;this.round.cityPass=1;
+        this.citySteer={x:0,z:0};this.cityDeliveredTargets.clear();this.cityPending=[];
+        this.emit({type:"cityStarted"});
+      }
+      this.publish();return;
+    }
+    if(this.round.status==="city"){
+      const r=this.round;
+      r.cityX=Math.max(-29,Math.min(29,r.cityX+this.citySteer.x*1.65));
+      r.cityAltitude=Math.max(-7,Math.min(9,r.cityAltitude+this.citySteer.z*.8));
+      r.cityDistance+=CITY_SPEED*.1;
+      for(let i=this.cityPending.length-1;i>=0;i--){
+        const pending=this.cityPending[i];
+        if(pending.at>this.time)continue;
+        this.cityPending.splice(i,1);
+        const didHit=pending.targetId!==null&&!this.cityDeliveredTargets.has(pending.targetId);
+        if(didHit)this.cityDeliveredTargets.add(pending.targetId!);
+        r.cityDelivered=this.cityDeliveredTargets.size;
+        this.emit({type:"presentLanded",hit:didHit,count:r.cityDelivered,targetId:didHit?pending.targetId:null});
+      }
+      if(r.cityDelivered>=CITY_REQUIRED_DELIVERIES){
+        r.status="rescued";this.finishTime=this.time-this.roundStarted;p.score++;
+      } else if(r.cityDistance>=CITY_LENGTH){
+        r.cityDistance=0;r.cityPass++;
+        this.emit({type:"cityPass",pass:r.cityPass});
       }
       this.publish();return;
     }
