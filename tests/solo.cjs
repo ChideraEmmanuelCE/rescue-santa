@@ -43,6 +43,7 @@ for(const [index,gift] of require("../lib/world.ts").VILLAGE_GIFTS.entries()){
  game.setLocalPose(gift.x,1,gift.z,0);advance(100);
  assert.equal(game.round.giftCount,index+1);
 }
+assert.equal(game.round.status,"cityLaunch");advance(4500);
 assert.equal(game.round.status,"city");assert.equal(game.round.cityDelivered,0);
 const {CITY_TARGETS,CITY_SPEED,CITY_CRUISE_ALTITUDE,CITY_REQUIRED_DELIVERIES,CITY_LENGTH}=require("../lib/world.ts");
 assert.equal(game.getCityAim().aligned,false);
