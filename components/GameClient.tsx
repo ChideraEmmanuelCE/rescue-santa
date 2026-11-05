@@ -111,6 +111,12 @@ export default function GameClient() {
     setStarted(true);
   }, [input, game, graphics]);
 
+  const enterAurora=()=>{
+    if(!graphics)return;
+    input.reset();setMapOpen(false);setMenuOpen(false);
+    enableSound();game.startAuroraVisit();setStarted(true);setAirport(false);
+    if(document.pointerLockElement)document.exitPointerLock();
+  };
   const enterAirport=()=>{
     if(!graphics)return;
     try{localStorage.setItem("rescue-santa-profile-v1",JSON.stringify(game.getProfile()));}catch{}
@@ -332,12 +338,12 @@ export default function GameClient() {
         {isDead&&<div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[#170d19]/55 p-5 backdrop-blur-sm"><div className="rounded-3xl border border-rose-300/30 bg-[#1a1424]/95 p-8 text-center shadow-2xl"><div className="text-5xl">💀</div><h2 className="mt-3 text-3xl font-black">YOU WERE DEFEATED</h2><p className="mt-2 text-sm text-white/70">Snowmen caught you. Respawning in {Math.max(1,Math.ceil((deadUntil-game.now())/1000))}s</p><p className="mt-2 text-xs text-rose-200">Use snowballs to keep them away next time.</p></div></div>}
         {portal&&!isComplete&&<div className="pointer-events-auto absolute bottom-[max(5rem,env(safe-area-inset-bottom))] left-1/2 z-30 -translate-x-1/2 rounded-2xl border border-amber-200/35 bg-[#0c2936]/95 px-4 py-3 text-center text-sm font-bold shadow-2xl">
           ✨ {portal.name}
-          <button className="ml-3 rounded-lg bg-amber-200 px-3 py-2 text-xs font-black text-[#18333b]" onClick={()=>portal.destination==="airport"?enterAirport():start("express")}>TRAVEL ↗</button>
+          <button className="ml-3 rounded-lg bg-amber-200 px-3 py-2 text-xs font-black text-[#18333b]" onClick={()=>portal.destination==="airport"?enterAirport():portal.destination==="aurora"?enterAurora():start("express")}>TRAVEL ↗</button>
         </div>}
         {isCity&&!isTouch&&<div className="pointer-events-none absolute bottom-[max(2rem,env(safe-area-inset-bottom))] right-4 z-30 hidden sm:block rounded-2xl border border-white/20 bg-[#081b2a]/85 px-4 py-3 text-center text-xs font-bold text-[#ffe2ae]">DROP · SPACE / F<br />{cityAim?.aligned?"TARGET ALIGNED ✓":"STEER TO A LIT DROP ZONE"}<div className="mt-1 text-[10px] text-white/70">PASS {hud.round.cityPass} · {hud.round.cityDelivered}/{game.deliveryGoal} DELIVERIES</div></div>}
         {isComplete && <div className="pointer-events-auto absolute inset-0 z-40 grid place-items-center bg-[#041723]/65 p-4 backdrop-blur-md"><div className="result-card max-w-[400px] rounded-3xl border border-amber-200/35 bg-[#092431]/95 p-8 text-center shadow-2xl"><div className="text-5xl">🎁</div><p className="mt-3 text-xs font-bold tracking-[.25em] text-amber-200">{game.express?"CHRISTMAS EVE EXPRESS":game.startedFromCity?"CITY DELIVERY PRACTICE":"ALL THREE CHAPTERS COMPLETE"}</p><h2 className="mt-2 text-3xl font-black text-[#f0d59f]">{missedRoute?"ROUTE FINISHED":game.express?"EXPRESS DELIVERED!":"CHRISTMAS DELIVERED!"}</h2><p className="mt-2 text-sm text-white/80">{game.startedFromCity?hud.round.cityDelivered+" of "+game.deliveryGoal+" stops served · "+hud.round.cityAttempts+" gifts dropped.":"You rescued Santa, recovered the village gifts, and delivered them across Midnight Metropolis."}</p><p className="mt-3 text-xs text-white/65">Run time {clockText(game.finishTime)}{!game.startedFromCity&&" · Best "+clockText(best||game.finishTime)}</p><button onClick={()=>{setMenuOpen(false);start(game.express?"express":game.startedFromCity?"city":"northPole")}} className="mt-6 w-full rounded-full bg-[#edcd8b] px-6 py-3 text-sm font-black text-[#122b34] shadow-lg">PLAY AGAIN ↗</button><button className="preview-link" onClick={enterAirport}>Continue to Noel Field ↗</button><button onClick={exit} className="mt-3 w-full rounded-full border border-white/20 px-6 py-2 text-xs font-bold text-white/80">EXIT TO MENU</button></div></div>}
 
-        {mapOpen&&<WorldMap game={game} close={()=>setMapOpen(false)} travel={destination=>{setMapOpen(false);if(destination==="airport")enterAirport();else start("express");}}/>}
+        {mapOpen&&<WorldMap game={game} close={()=>setMapOpen(false)} travel={destination=>{setMapOpen(false);if(destination==="airport")enterAirport();else if(destination==="aurora")enterAurora();else start("express");}}/>}
       </>}
     </main>
   );
