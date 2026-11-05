@@ -11,14 +11,14 @@ const kindEmoji:Record<string,string>={
  depot:"🚙",workshop:"🧰",ranch:"🦌",gateway:"✨",lake:"⛸️",cave:"🧊",
  airfield:"✈️",forest:"🌲",market:"🎪",square:"🎄"
 };
-export default function WorldMap({game,close,travel}:{game:SoloGame;close:()=>void;travel:(destination:"airport"|"express")=>void}){
+export default function WorldMap({game,close,travel}:{game:SoloGame;close:()=>void;travel:(destination:"airport"|"express"|"aurora")=>void}){
  const p=game.myPlayer;
  return <div className="pointer-events-auto absolute inset-0 z-50 flex items-center justify-center overflow-auto bg-[#06141e]/95 px-3 py-6 text-white backdrop-blur-xl" role="dialog" aria-label="North Pole world map" aria-modal="true">
   <div className="relative w-full max-w-[960px] rounded-3xl border border-[#d5ebd4]/25 bg-[#0e2937] p-4 shadow-2xl md:p-6">
    <div className="mb-4 flex items-start justify-between gap-4">
     <div><p className="text-[10px] font-black tracking-[.3em] text-[#e9c792]">NORTH POLE · EXPLORER'S ATLAS</p>
       <h2 className="mt-1 text-2xl font-black">The Great Christmas Tundra</h2>
-      <p className="text-xs text-white/65">Ten landmarks · 90 hidden presents · five vehicles · two travel gateways</p>
+      <p className="text-xs text-white/65">Ten landmarks · 90 hidden presents · five vehicles · three travel gateways</p>
     </div>
     <button onClick={close} className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-bold">CLOSE ✕</button>
    </div>
@@ -50,7 +50,7 @@ export default function WorldMap({game,close,travel}:{game:SoloGame;close:()=>vo
      {LANDMARKS.map((spot,i)=><div key={spot.id} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
        <div className="flex items-center justify-between gap-2"><span className="text-xs font-bold">{kindEmoji[spot.kind]} {spot.name}</span><span className="text-[10px] text-amber-100/70">{p?Math.round(Math.hypot(spot.x-p.x,spot.z-p.z))+" m":""}</span></div>
        <p className="mt-1 text-[10px] leading-relaxed text-white/60">{spot.description}</p>
-       {PORTALS.find(portal=>portal.id===spot.id)&&<button className="mt-2 rounded-lg border border-cyan-200/30 px-3 py-1.5 text-[11px] font-bold" onClick={()=>travel(spot.id==="airfield"?"airport":"express")}>Fast travel ↗</button>}
+       {PORTALS.find(portal=>portal.id===spot.id)&&<button className="mt-2 rounded-lg border border-cyan-200/30 px-3 py-1.5 text-[11px] font-bold" onClick={()=>travel(spot.id==="airfield"?"airport":spot.id==="gateway"?"aurora":"express")}>Fast travel ↗</button>}
      </div>)}
     </div>
    </div>
