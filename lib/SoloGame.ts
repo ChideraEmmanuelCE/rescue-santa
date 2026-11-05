@@ -4,13 +4,15 @@ import {VehicleFleet} from "./VehicleFleet";
 import { collidesWorld, enemyPosition, ENEMY_COUNT, INTERACTION_RANGE, RESCUE_DURATION_MS, spawnPosition, wallAt, SLEIGH_Z, SUPPLIES, VILLAGE_GIFTS, FLIGHT_DURATION_MS, CITY_TARGETS, EXPRESS_STOPS, CITY_SPEED, CITY_LENGTH, CITY_CRUISE_ALTITUDE, CITY_REQUIRED_DELIVERIES } from "./world";
 
 type Enemy = EnemyState & {nextAttack:number};
-const freshRound = (round:number): RoundState => ({round,status:"playing",progress:0,resetAt:0,escort:0,blocked:false,giftCount:0,worldPresents:0,credits:0,magic:100,frostShieldUntil:0,cityScore:0,cityCombo:0,cityBestCombo:0,cityPerfect:0,cityDistance:0,cityX:0,cityAltitude:0,cityDelivered:0,cityAttempts:0,cityPass:1});
+const freshRound = (round:number): RoundState => ({round,status:"playing",progress:0,resetAt:0,escort:0,blocked:false,giftCount:0,worldPresents:0,worldVisited:0,credits:0,magic:100,frostShieldUntil:0,cityScore:0,cityCombo:0,cityBestCombo:0,cityPerfect:0,cityDistance:0,cityX:0,cityAltitude:0,cityDelivered:0,cityAttempts:0,cityPass:1});
 
 /** One expedition per tab. Only active scene frames advance game time. */
 export default class SoloGame {
   myPlayer:PlayerState|null=null;
   readonly vehicles=new VehicleFleet();
   readonly foundPresents=new Set<number>();
+  readonly visitedLandmarks=new Set<string>();
+  readonly completedMilestones=new Set<string>();
   credits=0;
   lifetimeDeliveries=0;
   private lastShieldCast=-Infinity;
@@ -65,7 +67,7 @@ export default class SoloGame {
     return Boolean(p&&["playing","escort"].includes(this.round.status)&&(this.vehicles.active||this.vehicles.closest(p.x,p.z,5.6)));
   }
   getProfile(){
-    return {version:1,credits:this.credits,found:[...this.foundPresents],lifetimeDeliveries:this.lifetimeDeliveries};
+    return {version:1,credits:this.credits,found:[...this.foundPresents],visited:[...this.visitedLandmarks],milestones:[...this.completedMilestones],lifetimeDeliveries:this.lifetimeDeliveries};
   }
   loadProfile(value:unknown){
     if(!value||typeof value!=="object")return;
@@ -75,7 +77,10 @@ export default class SoloGame {
     this.lifetimeDeliveries=typeof v.lifetimeDeliveries==="number"&&Number.isFinite(v.lifetimeDeliveries)?Math.max(0,Math.min(100_000,Math.floor(v.lifetimeDeliveries))):0;
     this.foundPresents.clear();
     if(Array.isArray(v.found))for(const n of v.found)if(Number.isInteger(n)&&n>=0&&n<LOST_PRESENTS.length)this.foundPresents.add(n);
-    this.round.worldPresents=this.foundPresents.size;this.round.credits=this.credits;
+    this.visitedLandmarks.clear();this.completedMilestones.clear();
+    if(Array.isArray(v.visited))for(const id of v.visited)if(typeof id==="string"&&LANDMARKS.some(spot=>spot.id===id))this.visitedLandmarks.add(id);
+    if(Array.isArray(v.milestones))for(const id of v.milestones)if(typeof id==="string"&&["presents-10","presents-30","presents-60","presents-90","landmarks-5","landmarks-10"].includes(id))this.completedMilestones.add(id);
+    this.round.worldPresents=this.foundPresents.size;this.round.worldVisited=this.visitedLandmarks.size;this.round.credits=this.credits;
     this.publish();
   }
   setVehicleControls(x:number,z:number,brake:boolean,boost:boolean){this.vehicles.setControls(x,z,brake,boost);}
@@ -118,7 +123,7 @@ export default class SoloGame {
     this.time=Date.now(); this.roundStarted=this.time;this.finishTime=0;this.startedFromCity=false;this.express=false;this.remainder=0; this.round=freshRound(1);
     this.myPlayer={...spawnPosition(0),yaw:0,health:100,deadUntil:0,stunnedUntil:0,score:0,kills:0};
     this.vehicles.reset();this.lastShieldCast=this.lastWaveCast=-Infinity;this.recentNaughty=0;this.naughtyUntil=0;
-    this.round.worldPresents=this.foundPresents.size;this.round.credits=this.credits;
+    this.round.worldPresents=this.foundPresents.size;this.round.worldVisited=this.visitedLandmarks.size;this.round.credits=this.credits;
     this.broken.clear();this.collected.clear();this.villageCollected.clear();this.cityDeliveredTargets.clear();this.cityPending=[];this.lastCityDrop=-Infinity;this.citySteer={x:0,z:0};this.cityDropSerial=0;this.respawn(); this.seedEnemies(); this.publish();
   }
   /** Owner-friendly instant city preview; it never replaces or resets the adventure. */
@@ -308,6 +313,13 @@ export default class SoloGame {
       OUTER_PINES.some(tree=>Math.hypot(tree.x-x,tree.z-z)<tree.size*.75+padding));
     if(this.vehicles.active){const v=this.vehicles.active;Object.assign(p,{x:v.x,y:1.15,z:v.z,yaw:v.heading});}
     if(!this.vehicles.active){
+      for(const site of LANDMARKS){
+        if(this.visitedLandmarks.has(site.id)||Math.hypot(site.x-p.x,site.z-p.z)>13)continue;
+        this.visitedLandmarks.add(site.id);
+        this.round.worldVisited=this.visitedLandmarks.size;
+        this.credits+=35;this.round.credits=this.credits;
+        this.emit({type:"landmark",name:site.name,count:this.visitedLandmarks.size,total:LANDMARKS.length,credits:this.credits});
+      }
       for(const present of LOST_PRESENTS){
         if(!this.foundPresents.has(present.id)&&Math.hypot(p.x-present.x,p.z-present.z)<2.65){
           this.foundPresents.add(present.id);
@@ -316,6 +328,23 @@ export default class SoloGame {
           this.round.credits=this.credits;
           this.emit({type:"foundPresent",count:this.foundPresents.size,total:LOST_PRESENTS.length,credits:this.credits,kind:present.type});
         }
+      }
+    }
+    for(const [id,goal,reward,name] of [
+      ["presents-10",10,125,"Parcels Scout"],["presents-30",30,350,"Parcel Ranger"],
+      ["presents-60",60,600,"Snowland Courier"],["presents-90",90,1000,"North Pole Treasure Master"]
+    ] as [string,number,number,string][]){
+      if(this.foundPresents.size>=goal&&!this.completedMilestones.has(id)){
+        this.completedMilestones.add(id);this.credits+=reward;this.round.credits=this.credits;
+        this.emit({type:"milestone",name,credits:reward});
+      }
+    }
+    for(const [id,goal,reward,name] of [
+      ["landmarks-5",5,200,"Tundra Pathfinder"],["landmarks-10",10,600,"Polar Explorer"]
+    ] as [string,number,number,string][]){
+      if(this.visitedLandmarks.size>=goal&&!this.completedMilestones.has(id)){
+        this.completedMilestones.add(id);this.credits+=reward;this.round.credits=this.credits;
+        this.emit({type:"milestone",name,credits:reward});
       }
     }
     if(p.deadUntil && p.deadUntil<=this.time)this.respawn();
