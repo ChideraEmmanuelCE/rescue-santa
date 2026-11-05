@@ -55,7 +55,8 @@ export const LOST_PRESENTS:readonly {id:number;x:number;z:number;type:"ordinary"
 })();
 export const PORTALS=[
  {id:"airport",name:"Noel Field",x:166,z:55,radius:8,destination:"airport"},
- {id:"express",name:"Christmas Eve Express",x:137,z:-106,radius:8,destination:"express"}
+ {id:"aurora",name:"Aurora Village",x:137,z:-106,radius:8,destination:"aurora"},
+ {id:"express",name:"Christmas Eve Express",x:178,z:-83,radius:8,destination:"express"}
 ] as const;
 export const REGION_ROADMAP=[
  "North Pole & Santa's Village","Aurora Village","Midnight Metropolis",
