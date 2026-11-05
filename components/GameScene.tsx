@@ -15,6 +15,7 @@ import {RouteMarkers,SleighEscape} from "./EscapeTrail";
 import {useSyncExternalStore} from "react";
 import WinterLight, { Powder } from "./WinterLight";
 import Scenery from "./Scenery";
+import NorthPoleDistrict from "./NorthPoleDistrict";
 import SkyChapter from "./SkyChapter";
 import CityChapter from "./CityChapter";
 import { ENEMY_COUNT, enemyPosition, ICE_WALLS, random01, TREES, WORLD_HALF, collidesWall } from "@/lib/world";
@@ -208,8 +209,9 @@ function FollowCamera({game,input,position,lowPower}:{game:SoloGame;input:InputC
    const alpha=1-Math.exp(-dt*7.5);
    const d=Math.atan2(Math.sin(input.yaw-yawRef.current),Math.cos(input.yaw-yawRef.current));
    yawRef.current+=d*(1-Math.exp(-dt*12));
-   const yaw=yawRef.current,dist=lowPower?5.3:6.2;
-   const h=1.9+input.pitch*3.2;
+   const mounted=game.vehicles.active;
+   const yaw=yawRef.current,dist=mounted?(lowPower?9.5:11.5):(lowPower?5.3:6.2);
+   const h=(mounted?3.6:1.9)+input.pitch*3.2;
    front.set(follow.x+Math.sin(yaw)*4, Math.max(.5,follow.y)+1.15-input.pitch*2,follow.z-Math.cos(yaw)*4);
    let distance=dist;
    // Pull camera toward the avatar near ice or trees rather than clipping through them.
@@ -222,7 +224,7 @@ function FollowCamera({game,input,position,lowPower}:{game:SoloGame;input:InputC
    camera.position.lerp(desired,alpha);
    focus.current.lerp(front,1-Math.exp(-dt*13));
    camera.lookAt(focus.current);
-   const targetFov=lowPower?65:62;
+   const targetFov=mounted?Math.min(80,(lowPower?65:62)+8+Math.abs(mounted.speed)*.21):(lowPower?65:62);
    if(Math.abs((camera as THREE.PerspectiveCamera).fov-targetFov)>.03){(camera as THREE.PerspectiveCamera).fov=THREE.MathUtils.damp((camera as THREE.PerspectiveCamera).fov,targetFov,6,dt);(camera as THREE.PerspectiveCamera).updateProjectionMatrix();}
  });
  return null;
@@ -313,6 +315,7 @@ function World({ game, input, lowPower }: { game: SoloGame; input: InputControll
       </RigidBody>}
       <LocalPlayer game={game} input={input} position={playerPosition} />
     </Physics>
+    <NorthPoleDistrict game={game} lowPower={lowPower}/>
     <IceCage game={game} />
     {Array.from({ length: ENEMY_COUNT }, (_, id) => <Snowman key={id} game={game} id={id} />)}
 
