@@ -46,11 +46,11 @@ export default function WorldMap({game,close,travel}:{game:SoloGame;close:()=>vo
      <text x="15" y="402" fill="#aecdd2" fontSize="10">440 m × 440 m · offline map</text>
     </svg>
     <div className="max-h-[390px] space-y-2 overflow-y-auto pr-1">
-     <div className="rounded-xl border border-amber-200/20 bg-white/5 px-3 py-3 text-xs font-semibold">🎁 Presents found: {game.foundPresents.size}/{LOST_PRESENTS.length} · 🪙 Credits: {game.credits.toLocaleString()}</div>
+     <div className="rounded-xl border border-amber-200/20 bg-white/5 px-3 py-3 text-xs font-semibold">🎁 Presents found: {game.foundPresents.size}/{LOST_PRESENTS.length} · 🗺 Sites: {game.visitedLandmarks.size}/10 · 🪙 Credits: {game.credits.toLocaleString()}</div>
      {LANDMARKS.map((spot,i)=><div key={spot.id} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
        <div className="flex items-center justify-between gap-2"><span className="text-xs font-bold">{kindEmoji[spot.kind]} {spot.name}</span><span className="text-[10px] text-amber-100/70">{p?Math.round(Math.hypot(spot.x-p.x,spot.z-p.z))+" m":""}</span></div>
        <p className="mt-1 text-[10px] leading-relaxed text-white/60">{spot.description}</p>
-       {PORTALS.find(portal=>portal.id===spot.id)&&<button className="mt-2 rounded-lg border border-cyan-200/30 px-3 py-1.5 text-[11px] font-bold" onClick={()=>travel(spot.id==="airfield"?"airport":spot.id==="gateway"?"aurora":"express")}>Fast travel ↗</button>}
+       {PORTALS.find(portal=>portal.destination==="airport"?spot.id==="airfield":spot.id==="aurora")&&<button className="mt-2 rounded-lg border border-cyan-200/30 px-3 py-1.5 text-[11px] font-bold" onClick={()=>travel(spot.id==="airfield"?"airport":spot.id==="gateway"?"aurora":"express")}>Fast travel ↗</button>}
      </div>)}
     </div>
    </div>
