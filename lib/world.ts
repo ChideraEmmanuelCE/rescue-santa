@@ -1,5 +1,6 @@
 /** Collision and patrol data for the expedition. */
-export const WORLD_HALF = 46;
+// 220-metre half-width: 22.9x the area of the original 46m arena.
+export const WORLD_HALF = 220;
 export const PLAYER_SPEED = 7.1;
 export const JUMP_IMPULSE = 8.1;
 export const INTERACTION_RANGE = 4.8;
