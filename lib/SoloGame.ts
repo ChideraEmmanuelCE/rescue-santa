@@ -1,12 +1,22 @@
 import type { EnemyState, GameEvent, PlayerState, RoundState } from "./protocol";
+import {LANDMARKS,LOST_PRESENTS,PORTALS} from "./OpenWorld";
+import {VehicleFleet} from "./VehicleFleet";
 import { collidesWorld, enemyPosition, ENEMY_COUNT, INTERACTION_RANGE, RESCUE_DURATION_MS, spawnPosition, wallAt, SLEIGH_Z, SUPPLIES, VILLAGE_GIFTS, FLIGHT_DURATION_MS, CITY_TARGETS, EXPRESS_STOPS, CITY_SPEED, CITY_LENGTH, CITY_CRUISE_ALTITUDE, CITY_REQUIRED_DELIVERIES } from "./world";
 
 type Enemy = EnemyState & {nextAttack:number};
-const freshRound = (round:number): RoundState => ({round,status:"playing",progress:0,resetAt:0,escort:0,blocked:false,giftCount:0,cityDistance:0,cityX:0,cityAltitude:0,cityDelivered:0,cityAttempts:0,cityPass:1});
+const freshRound = (round:number): RoundState => ({round,status:"playing",progress:0,resetAt:0,escort:0,blocked:false,giftCount:0,worldPresents:0,credits:0,magic:100,frostShieldUntil:0,cityScore:0,cityCombo:0,cityBestCombo:0,cityPerfect:0,cityDistance:0,cityX:0,cityAltitude:0,cityDelivered:0,cityAttempts:0,cityPass:1});
 
 /** One expedition per tab. Only active scene frames advance game time. */
 export default class SoloGame {
   myPlayer:PlayerState|null=null;
+  readonly vehicles=new VehicleFleet();
+  readonly foundPresents=new Set<number>();
+  credits=0;
+  lifetimeDeliveries=0;
+  private lastShieldCast=-Infinity;
+  private lastWaveCast=-Infinity;
+  private naughtyUntil=0;
+  private recentNaughty=0;
   round=freshRound(1);
   enemies=new Map<number,Enemy>();
   spawnVersion=0;
@@ -21,7 +31,7 @@ export default class SoloGame {
   collected=new Set<number>();
   villageCollected=new Set<number>();
   cityDeliveredTargets=new Set<number>();
-  private cityPending:{at:number;targetId:number|null}[]=[];
+  private cityPending:{at:number;targetId:number|null;quality:number;perfect:boolean}[]=[];
   private lastCityDrop=-Infinity;
   private citySteer={x:0,z:0};
   private cityDropSerial=0;
@@ -39,6 +49,66 @@ export default class SoloGame {
   onEvent=(fn:(e:GameEvent)=>void)=>{this.effects.add(fn);return ()=>{this.effects.delete(fn);};};
   getSnapshot=()=>this.hud;
   now(){return this.time;}
+  get nearbyLandmark(){
+    const p=this.myPlayer;
+    if(!p)return null;
+    const landmark=LANDMARKS.reduce((best,next)=>!best||Math.hypot(next.x-p.x,next.z-p.z)<Math.hypot(best.x-p.x,best.z-p.z)?next:best,null as (typeof LANDMARKS)[number]|null);
+    return landmark&&Math.hypot(landmark.x-p.x,landmark.z-p.z)<23?landmark:null;
+  }
+  get nearbyPortal(){
+    const p=this.myPlayer;
+    if(!p||!["playing","escort"].includes(this.round.status)||this.vehicles.active)return null;
+    return PORTALS.find(portal=>Math.hypot(p.x-portal.x,p.z-portal.z)<portal.radius)??null;
+  }
+  get canBoardVehicle(){
+    const p=this.myPlayer;
+    return Boolean(p&&["playing","escort"].includes(this.round.status)&&(this.vehicles.active||this.vehicles.closest(p.x,p.z,5.6)));
+  }
+  getProfile(){
+    return {version:1,credits:this.credits,found:[...this.foundPresents],lifetimeDeliveries:this.lifetimeDeliveries};
+  }
+  loadProfile(value:unknown){
+    if(!value||typeof value!=="object")return;
+    const v=value as Record<string,unknown>;
+    if(v.version!==1)return;
+    this.credits=typeof v.credits==="number"&&Number.isFinite(v.credits)?Math.max(0,Math.min(1_000_000,Math.floor(v.credits))):0;
+    this.lifetimeDeliveries=typeof v.lifetimeDeliveries==="number"&&Number.isFinite(v.lifetimeDeliveries)?Math.max(0,Math.min(100_000,Math.floor(v.lifetimeDeliveries))):0;
+    this.foundPresents.clear();
+    if(Array.isArray(v.found))for(const n of v.found)if(Number.isInteger(n)&&n>=0&&n<LOST_PRESENTS.length)this.foundPresents.add(n);
+    this.round.worldPresents=this.foundPresents.size;this.round.credits=this.credits;
+    this.publish();
+  }
+  setVehicleControls(x:number,z:number,brake:boolean,boost:boolean){this.vehicles.setControls(x,z,brake,boost);}
+  toggleVehicle(){
+    const p=this.myPlayer;
+    if(!p||!["playing","escort"].includes(this.round.status))return false;
+    if(this.vehicles.active){
+      const old=this.vehicles.active,d=this.vehicles.dismount();
+      if(!d)return false;
+      Object.assign(p,{x:d.x,y:1.15,z:d.z,yaw:d.heading});
+      this.spawnVersion++;this.emit({type:"vehicle",boarded:false,name:old.name});this.publish();return true;
+    }
+    if(!this.vehicles.board(p.x,p.z))return false;
+    const v=this.vehicles.active!;
+    Object.assign(p,{x:v.x,y:1.15,z:v.z,yaw:v.heading});
+    this.heldSince=null;this.spawnVersion++;this.emit({type:"vehicle",boarded:true,name:v.name});this.publish();return true;
+  }
+  castShield(){
+    if(!this.myPlayer||!["playing","escort"].includes(this.round.status)||this.round.magic<35||this.time-this.lastShieldCast<8000)return false;
+    this.lastShieldCast=this.time;this.round.magic-=35;this.round.frostShieldUntil=this.time+4500;
+    this.emit({type:"shieldCast",magic:this.round.magic});this.publish();return true;
+  }
+  castFrostWave(){
+    const p=this.myPlayer;
+    if(!p||!["playing","escort"].includes(this.round.status)||this.round.magic<55||this.time-this.lastWaveCast<6500)return false;
+    this.lastWaveCast=this.time;this.round.magic-=55;
+    let hits=0;
+    for(const foe of this.enemies.values()){
+      if(foe.downUntil>this.time||Math.hypot(foe.x-p.x,foe.z-p.z)>10)continue;
+      foe.stunnedUntil=this.time+2500;foe.windupUntil=foe.lungeUntil=0;hits++;
+    }
+    this.emit({type:"frostWave",hits});this.publish();return true;
+  }
   private publish(){
     this.hud={me:this.myPlayer && {...this.myPlayer},round:{...this.round}};
     for(const fn of this.listeners)fn();
@@ -47,6 +117,8 @@ export default class SoloGame {
   start(){
     this.time=Date.now(); this.roundStarted=this.time;this.finishTime=0;this.startedFromCity=false;this.express=false;this.remainder=0; this.round=freshRound(1);
     this.myPlayer={...spawnPosition(0),yaw:0,health:100,deadUntil:0,stunnedUntil:0,score:0,kills:0};
+    this.vehicles.reset();this.lastShieldCast=this.lastWaveCast=-Infinity;this.recentNaughty=0;this.naughtyUntil=0;
+    this.round.worldPresents=this.foundPresents.size;this.round.credits=this.credits;
     this.broken.clear();this.collected.clear();this.villageCollected.clear();this.cityDeliveredTargets.clear();this.cityPending=[];this.lastCityDrop=-Infinity;this.citySteer={x:0,z:0};this.cityDropSerial=0;this.respawn(); this.seedEnemies(); this.publish();
   }
   /** Owner-friendly instant city preview; it never replaces or resets the adventure. */
@@ -59,7 +131,7 @@ export default class SoloGame {
     this.emit({type:"cityStarted"});
     this.publish();
   }
-  stop(){this.myPlayer=null;this.enemies.clear();this.villageCollected.clear();this.cityDeliveredTargets.clear();this.cityPending=[];this.citySteer={x:0,z:0};this.heldSince=null;this.round=freshRound(1);this.publish();}
+  stop(){this.vehicles.reset();this.myPlayer=null;this.enemies.clear();this.villageCollected.clear();this.cityDeliveredTargets.clear();this.cityPending=[];this.citySteer={x:0,z:0};this.heldSince=null;this.round=freshRound(1);this.publish();}
   private respawn(){
     if(!this.myPlayer)return;
     Object.assign(this.myPlayer,spawnPosition(0),{yaw:0,health:100,deadUntil:0,stunnedUntil:0});
@@ -106,18 +178,21 @@ export default class SoloGame {
     const impactZ=hit?aim!.impactZ:-(r.cityDistance+CITY_SPEED*flight/1000);
     const impactY=hit?aim!.target.y:0.35;
     const id=hit?aim!.target.id:null;
-    this.cityPending.push({at:this.time+flight,targetId:id});
+    const quality=hit?Math.max(0,1-aim!.distance/aim!.target.radius):0;
+    const perfect=Boolean(hit&&aim!.distance<3.7);
+    this.cityPending.push({at:this.time+flight,targetId:id,quality,perfect});
     r.cityAttempts++;
     this.emit({type:"presentDrop",key:++this.cityDropSerial,x:r.cityX,y:CITY_CRUISE_ALTITUDE+r.cityAltitude,z:-r.cityDistance,impactX,impactY,impactZ,flightMs:flight,hit});
     this.publish();return true;
   }
   hold(held:boolean){
     const p=this.myPlayer;
-    const allowed=p && this.round.status==="playing" && p.stunnedUntil<=this.time && !p.deadUntil && Math.hypot(p.x,p.z)<=INTERACTION_RANGE;
+    const allowed=p && !this.vehicles.active && this.round.status==="playing" && p.stunnedUntil<=this.time && !p.deadUntil && Math.hypot(p.x,p.z)<=INTERACTION_RANGE;
     this.heldSince=held && allowed ? this.heldSince??this.time : null;
   }
   fire(heavy=false){
     const p=this.myPlayer;
+    if(this.vehicles.active)return false;
     if(!p||p.deadUntil||p.stunnedUntil>this.time|| !["playing","escort"].includes(this.round.status)||this.time-this.lastThrow<350)return false;
     this.lastThrow=this.time;
     const fx=Math.sin(p.yaw),fz=-Math.cos(p.yaw);
@@ -138,7 +213,7 @@ export default class SoloGame {
     }
     if(hit){
       hit.health=Math.max(0,hit.health-(heavy?2:1));hit.stunnedUntil=this.time+(heavy?1900:650);hit.windupUntil=0;hit.lungeUntil=0;
-      if(!hit.health){hit.downUntil=this.time+7800;hit.attackUntil=0;p.kills++;}
+      if(!hit.health){hit.downUntil=this.time+7800;hit.attackUntil=0;p.kills++;this.credits+=20;this.round.credits=this.credits;}
       this.emit({type:"enemyHit",id:hit.id,health:hit.health});
     }
     this.emit({type:"snowball",x:p.x,y:p.y+.8,z:p.z,yaw:p.yaw,hitEnemy:hit?.id??null,range:nearest,heavy});
@@ -197,9 +272,18 @@ export default class SoloGame {
         if(pending.at>this.time)continue;
         this.cityPending.splice(i,1);
         const didHit=pending.targetId!==null&&!this.cityDeliveredTargets.has(pending.targetId);
-        if(didHit)this.cityDeliveredTargets.add(pending.targetId!);
+        let points=0;
+        if(didHit){
+          this.cityDeliveredTargets.add(pending.targetId!);
+          r.cityCombo++;
+          r.cityBestCombo=Math.max(r.cityBestCombo,r.cityCombo);
+          if(pending.perfect)r.cityPerfect++;
+          points=Math.round((70+pending.quality*130+(pending.perfect?100:0))*(1+Math.min(5,r.cityCombo-1)*.20));
+          r.cityScore+=points;this.credits+=Math.floor(points/10);
+          this.lifetimeDeliveries++;r.credits=this.credits;
+        }else{r.cityCombo=0;}
         r.cityDelivered=this.cityDeliveredTargets.size;
-        this.emit({type:"presentLanded",hit:didHit,count:r.cityDelivered,targetId:didHit?pending.targetId:null});
+        this.emit({type:"presentLanded",hit:didHit,count:r.cityDelivered,targetId:didHit?pending.targetId:null,score:points,combo:r.cityCombo,perfect:didHit&&pending.perfect});
       }
       if(r.cityDelivered>=this.deliveryGoal){
         r.status="rescued";this.finishTime=this.time-this.roundStarted;p.score++;
@@ -212,6 +296,20 @@ export default class SoloGame {
       this.publish();return;
     }
     if(this.round.status==="rescued" || this.round.status==="routeEnded")return;
+    this.round.magic=Math.min(100,this.round.magic+.42);
+    this.vehicles.step(.1,(x,z,padding)=>collidesWorld(x,z,padding,this.broken));
+    if(this.vehicles.active){const v=this.vehicles.active;Object.assign(p,{x:v.x,y:1.15,z:v.z,yaw:v.heading});}
+    if(!this.vehicles.active){
+      for(const present of LOST_PRESENTS){
+        if(!this.foundPresents.has(present.id)&&Math.hypot(p.x-present.x,p.z-present.z)<2.65){
+          this.foundPresents.add(present.id);
+          this.credits+=present.type==="golden"?100:present.type==="letter"?35:12;
+          this.round.worldPresents=this.foundPresents.size;
+          this.round.credits=this.credits;
+          this.emit({type:"foundPresent",count:this.foundPresents.size,total:LOST_PRESENTS.length,credits:this.credits,kind:present.type});
+        }
+      }
+    }
     if(p.deadUntil && p.deadUntil<=this.time)this.respawn();
     for(const e of this.enemies.values()){
       if(e.downUntil>this.time||e.stunnedUntil>this.time)continue;
@@ -231,10 +329,14 @@ export default class SoloGame {
         e.x=x;e.z=z;
         if(!p.deadUntil && Math.hypot(p.x-x,p.z-z)<1.6 && p.y<2.15 && this.protectedUntil<=this.time){
           e.lungeUntil=0;
-          p.health=Math.max(0,p.health-24);this.protectedUntil=this.time+1050;
+          if(this.round.frostShieldUntil>this.time){
+            e.stunnedUntil=this.time+1200;this.emit({type:"shieldBlock"});this.protectedUntil=this.time+850;continue;
+          }
+          const attackDamage=e.id%4===2?18:e.id%4===3?30:24;
+          p.health=Math.max(0,p.health-attackDamage);this.protectedUntil=this.time+1050;
           this.heldSince=null;p.stunnedUntil=this.time+380;
           if(!p.health){p.deadUntil=this.time+5200;p.stunnedUntil=p.deadUntil;}
-          this.emit({type:"playerHit",damage:24,health:p.health});
+          this.emit({type:"playerHit",damage:attackDamage,health:p.health});
         }
         continue;
       }
@@ -243,12 +345,14 @@ export default class SoloGame {
       }
       const dx=target.x-e.x,dz=target.z-e.z,len=Math.hypot(dx,dz);
       if(len>.05){
-        const step=Math.min(chasing ? .345 : .29,len);
+        const speed=e.id%4===2?1.3:e.id%4===3?.82:1;
+        const step=Math.min((chasing ? .345 : .29)*speed,len);
         const x=e.x+dx/len*step,z=e.z+dz/len*step;
         if(Math.hypot(x,z)>4.9&&!collidesWorld(x,z,.45,this.broken)){e.x=x;e.z=z;}
         e.yaw=Math.atan2(dx,-dz);
       }
     }
+    if(this.vehicles.active&&p.health<100){p.health=Math.min(100,p.health+.02);}
     if(!p.deadUntil && p.health<100){
       SUPPLIES.forEach((v,i)=>{
         if(!this.collected.has(i) && Math.hypot(v.x-p.x,v.z-p.z)<1.9){
