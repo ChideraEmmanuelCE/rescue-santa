@@ -3,11 +3,21 @@
 import {useEffect,useMemo,useRef,useSyncExternalStore} from "react";
 import {useFrame} from "@react-three/fiber";
 import {Text} from "@react-three/drei";
+import {CuboidCollider,RigidBody} from "@react-three/rapier";
 import * as T from "three";
 import {LANDMARKS,LOST_PRESENTS,OUTER_CABINS,OUTER_PINES} from "@/lib/OpenWorld";
 import {VEHICLE_CATALOG, type VehicleState} from "@/lib/VehicleFleet";
 import SoloGame from "@/lib/SoloGame";
 import {random01} from "@/lib/world";
+
+/** Static compound colliders for the outer wilderness; mobile halves tree count. */
+export function NorthPoleCollisions({lowPower}:{lowPower:boolean}){
+ const trees=useMemo(()=>lowPower?OUTER_PINES.filter((_,i)=>i%2===0):OUTER_PINES,[lowPower]);
+ return <RigidBody type="fixed" colliders={false}>
+  {trees.map((p,i)=><CuboidCollider key={"tree"+i} args={[p.size*.27,p.size*1.45,p.size*.27]} position={[p.x,p.size*1.45,p.z]}/>)}
+  {OUTER_CABINS.map((p,i)=><CuboidCollider key={"cabin"+i} args={[p.size*2.7,p.size*1.9,p.size*2.5]} position={[p.x,p.size*1.9,p.z]}/>)}
+ </RigidBody>;
+}
 
 function ForestAndCabins({mobile}:{mobile:boolean}){
  const forest=useMemo(()=>mobile?OUTER_PINES.filter((_,i)=>i%2===0):OUTER_PINES,[mobile]);
