@@ -37,6 +37,9 @@ console.log("PASS: five driveable vehicle configurations, boarding, acceleration
 
 const game=new SoloGame();const events=[];game.onEvent(e=>events.push(e));
 game.start();
+const startedAt=game.now();game.paused=true;game.advance(1);
+assert.equal(game.now(),startedAt,"menu/map must pause the simulation");
+game.paused=false;
 assert(game.canBoardVehicle,"first snowmobile must be within reach of spawn");
 assert(game.toggleVehicle());
 assert(game.vehicles.active);
