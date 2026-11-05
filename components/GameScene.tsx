@@ -15,7 +15,7 @@ import {RouteMarkers,SleighEscape} from "./EscapeTrail";
 import {useSyncExternalStore} from "react";
 import WinterLight, { Powder } from "./WinterLight";
 import Scenery from "./Scenery";
-import NorthPoleDistrict from "./NorthPoleDistrict";
+import NorthPoleDistrict,{NorthPoleCollisions} from "./NorthPoleDistrict";
 import SkyChapter from "./SkyChapter";
 import CityChapter from "./CityChapter";
 import { ENEMY_COUNT, enemyPosition, ICE_WALLS, random01, TREES, WORLD_HALF, collidesWall } from "@/lib/world";
@@ -303,7 +303,7 @@ function World({ game, input, lowPower }: { game: SoloGame; input: InputControll
     <WinterLight lowPower={lowPower} />
     <Physics gravity={[0, -24, 0]} timeStep={1 / 60} interpolate>
       <Ground />
-      <Scenery lowPower={lowPower}/><ForestCollisions/>
+      <Scenery lowPower={lowPower}/><ForestCollisions/><NorthPoleCollisions lowPower={lowPower}/>
       <IceBarricades game={game}/><RouteMarkers game={game}/>
       {captive && <RigidBody type="fixed" colliders={false}>
         {Array.from({ length: 12 }, (_, i) => {
