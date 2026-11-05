@@ -1,5 +1,5 @@
 import type { EnemyState, GameEvent, PlayerState, RoundState } from "./protocol";
-import {LANDMARKS,LOST_PRESENTS,PORTALS} from "./OpenWorld";
+import {LANDMARKS,LOST_PRESENTS,PORTALS,OUTER_CABINS,OUTER_PINES} from "./OpenWorld";
 import {VehicleFleet} from "./VehicleFleet";
 import { collidesWorld, enemyPosition, ENEMY_COUNT, INTERACTION_RANGE, RESCUE_DURATION_MS, spawnPosition, wallAt, SLEIGH_Z, SUPPLIES, VILLAGE_GIFTS, FLIGHT_DURATION_MS, CITY_TARGETS, EXPRESS_STOPS, CITY_SPEED, CITY_LENGTH, CITY_CRUISE_ALTITUDE, CITY_REQUIRED_DELIVERIES } from "./world";
 
@@ -130,6 +130,12 @@ export default class SoloGame {
     this.enemies.clear();
     this.emit({type:"cityStarted"});
     this.publish();
+  }
+  /** Regional gateway: jump to the existing Aurora Village on-foot chapter. */
+  startAuroraVisit(){
+    this.start();this.round.status="village";this.enemies.clear();
+    Object.assign(this.myPlayer!,{x:0,y:1.15,z:32,yaw:0,deadUntil:0});
+    this.spawnVersion++;this.publish();
   }
   stop(){this.vehicles.reset();this.myPlayer=null;this.enemies.clear();this.villageCollected.clear();this.cityDeliveredTargets.clear();this.cityPending=[];this.citySteer={x:0,z:0};this.heldSince=null;this.round=freshRound(1);this.publish();}
   private respawn(){
@@ -297,7 +303,9 @@ export default class SoloGame {
     }
     if(this.round.status==="rescued" || this.round.status==="routeEnded")return;
     this.round.magic=Math.min(100,this.round.magic+.42);
-    this.vehicles.step(.1,(x,z,padding)=>collidesWorld(x,z,padding,this.broken));
+    this.vehicles.step(.1,(x,z,padding)=>collidesWorld(x,z,padding,this.broken)||
+      OUTER_CABINS.some(b=>Math.hypot(b.x-x,b.z-z)<4*b.size+padding)||
+      OUTER_PINES.some(tree=>Math.hypot(tree.x-x,tree.z-z)<tree.size*.75+padding));
     if(this.vehicles.active){const v=this.vehicles.active;Object.assign(p,{x:v.x,y:1.15,z:v.z,yaw:v.heading});}
     if(!this.vehicles.active){
       for(const present of LOST_PRESENTS){
