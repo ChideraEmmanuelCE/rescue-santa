@@ -6,6 +6,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { InputController } from "@/lib/InputController";
 import SoloGame from "@/lib/SoloGame";
 import {enableSound,playCue,sound,suspendSound,setMuted} from "@/lib/sound";
+const AirportGame=dynamic(()=>import("./AirportGame"),{ssr:false,loading:()=> <div className="air-pause">Opening Noel Field…</div>});
 const LobbyVista=dynamic(()=>import("./LobbyVista"),{ssr:false});
 import { INTERACTION_RANGE, CITY_LENGTH, CITY_SPEED } from "@/lib/world";
 
@@ -71,7 +72,8 @@ export default function GameClient() {
   const hud = useSyncExternalStore(game.subscribe, game.getSnapshot, game.getSnapshot);
   const [graphics,setGraphics]=useState<boolean|null>(null);
   const [best,setBest]=useState(0);
-  const [mission,setMission]=useState<"northPole"|"express">("northPole");
+  const [mission,setMission]=useState<"northPole"|"express"|"airport">("northPole");
+  const [airport,setAirport]=useState(false);
   const [started, setStarted] = useState(false);
 
   const [isTouch, setIsTouch] = useState(false);
@@ -101,13 +103,19 @@ export default function GameClient() {
     setStarted(true);
   }, [input, game, graphics]);
 
+  const enterAirport=()=>{
+    if(!graphics)return;
+    input.reset();game.stop();setStarted(false);setMenuOpen(false);enableSound();setAirport(true);
+    if(document.pointerLockElement)document.exitPointerLock();
+  };
+
   const exit = useCallback(() => {
     input.reset();
     game.hold(false);
     game.stop();
     if (document.pointerLockElement) document.exitPointerLock();
     suspendSound();if(document.fullscreenElement)void document.exitFullscreen().catch(()=>{});
-    setStarted(false);
+    setStarted(false);setAirport(false);
   }, [input, game]);
 
   useEffect(() => {
@@ -215,7 +223,7 @@ export default function GameClient() {
 
   return (
     <main className="game-root overflow-hidden bg-[#081a23] text-white" style={{touchAction:"none"}}>
-      {!started ? (
+      {airport?<AirportGame mobile={isTouch} silent={silent} exit={exit} toggleSound={()=>{setMuted(!silent);setSilent(!silent);try{localStorage.setItem("santa-muted",String(!silent))}catch{}}}/>:!started ? (
         <div className="lobby">
           {graphics && <LobbyVista/>}<div className="shade"/>
           <header className="mast"><i/> NORTH POLE RESCUE SERVICE <span>FIELD OPERATIONS &nbsp;/&nbsp; 01</span></header>
@@ -225,10 +233,11 @@ export default function GameClient() {
             <div className="mission-options" role="group" aria-label="Choose a mission">
               <button aria-pressed={mission==="northPole"} onClick={()=>setMission("northPole")}>Adventure</button>
               <button aria-pressed={mission==="express"} onClick={()=>setMission("express")}>Christmas Eve Express</button>
+              <button aria-pressed={mission==="airport"} onClick={()=>setMission("airport")}>Airfield</button>
             </div>
-            <p className="story">{mission==="express"?"One pass. Deliver to the Toy Workshop, Children’s Hospital, and Riverside School before Santa leaves the city.":"Free Santa, fly to Aurora Village together, then deliver presents across Midnight Metropolis."}</p>
+            <p className="story">{mission==="airport"?"Board the red mail plane at Noel Field. Fly Christmas parcels to Starfall Post and land on its lighted runway.":mission==="express"?"One pass. Deliver to the Toy Workshop, Children’s Hospital, and Riverside School before Santa leaves the city.":"Free Santa, fly to Aurora Village together, then deliver presents across Midnight Metropolis."}</p>
             {best>0&&mission==="northPole"&&<p className="exp-best">Personal best · {clockText(best)}</p>}
-            <button className="deploy" onClick={()=>start(mission)} disabled={graphics!==true}>{mission==="express"?"Fly express route":"Start expedition"} <span>↗</span></button>
+            <button className="deploy" onClick={()=>mission==="airport"?enterAirport():start(mission)} disabled={graphics!==true}>{mission==="airport"?"Enter Noel Field":mission==="express"?"Fly express route":"Start expedition"} <span>↗</span></button>
             <button className="preview-link" onClick={()=>start("city")} disabled={graphics!==true}>Practice city deliveries</button>
             {graphics===false&&<p role="status" className="graphics-note">3D play needs WebGL 2. Open this link in Safari or Chrome with graphics acceleration enabled.</p>}
           </section>
@@ -282,7 +291,7 @@ export default function GameClient() {
         {damageFlash && <div className="pointer-events-none absolute inset-0 z-30 border-[9px] border-red-500/75 bg-red-700/15"/>}
         {isDead&&<div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[#170d19]/55 p-5 backdrop-blur-sm"><div className="rounded-3xl border border-rose-300/30 bg-[#1a1424]/95 p-8 text-center shadow-2xl"><div className="text-5xl">💀</div><h2 className="mt-3 text-3xl font-black">YOU WERE DEFEATED</h2><p className="mt-2 text-sm text-white/70">Snowmen caught you. Respawning in {Math.max(1,Math.ceil((deadUntil-game.now())/1000))}s</p><p className="mt-2 text-xs text-rose-200">Use snowballs to keep them away next time.</p></div></div>}
         {isCity&&!isTouch&&<div className="pointer-events-none absolute bottom-[max(2rem,env(safe-area-inset-bottom))] right-4 z-30 hidden sm:block rounded-2xl border border-white/20 bg-[#081b2a]/85 px-4 py-3 text-center text-xs font-bold text-[#ffe2ae]">DROP · SPACE / F<br />{cityAim?.aligned?"TARGET ALIGNED ✓":"STEER TO A LIT DROP ZONE"}<div className="mt-1 text-[10px] text-white/70">PASS {hud.round.cityPass} · {hud.round.cityDelivered}/{game.deliveryGoal} DELIVERIES</div></div>}
-        {isComplete && <div className="pointer-events-auto absolute inset-0 z-40 grid place-items-center bg-[#041723]/65 p-4 backdrop-blur-md"><div className="result-card max-w-[400px] rounded-3xl border border-amber-200/35 bg-[#092431]/95 p-8 text-center shadow-2xl"><div className="text-5xl">🎁</div><p className="mt-3 text-xs font-bold tracking-[.25em] text-amber-200">{game.express?"CHRISTMAS EVE EXPRESS":game.startedFromCity?"CITY DELIVERY PRACTICE":"ALL THREE CHAPTERS COMPLETE"}</p><h2 className="mt-2 text-3xl font-black text-[#f0d59f]">{missedRoute?"ROUTE FINISHED":game.express?"EXPRESS DELIVERED!":"CHRISTMAS DELIVERED!"}</h2><p className="mt-2 text-sm text-white/80">{game.startedFromCity?hud.round.cityDelivered+" of "+game.deliveryGoal+" stops served · "+hud.round.cityAttempts+" gifts dropped.":"You rescued Santa, recovered the village gifts, and delivered them across Midnight Metropolis."}</p><p className="mt-3 text-xs text-white/65">Run time {clockText(game.finishTime)}{!game.startedFromCity&&" · Best "+clockText(best||game.finishTime)}</p><button onClick={()=>{setMenuOpen(false);start(game.express?"express":game.startedFromCity?"city":"northPole")}} className="mt-6 w-full rounded-full bg-[#edcd8b] px-6 py-3 text-sm font-black text-[#122b34] shadow-lg">PLAY AGAIN ↗</button><button onClick={exit} className="mt-3 w-full rounded-full border border-white/20 px-6 py-2 text-xs font-bold text-white/80">EXIT TO MENU</button></div></div>}
+        {isComplete && <div className="pointer-events-auto absolute inset-0 z-40 grid place-items-center bg-[#041723]/65 p-4 backdrop-blur-md"><div className="result-card max-w-[400px] rounded-3xl border border-amber-200/35 bg-[#092431]/95 p-8 text-center shadow-2xl"><div className="text-5xl">🎁</div><p className="mt-3 text-xs font-bold tracking-[.25em] text-amber-200">{game.express?"CHRISTMAS EVE EXPRESS":game.startedFromCity?"CITY DELIVERY PRACTICE":"ALL THREE CHAPTERS COMPLETE"}</p><h2 className="mt-2 text-3xl font-black text-[#f0d59f]">{missedRoute?"ROUTE FINISHED":game.express?"EXPRESS DELIVERED!":"CHRISTMAS DELIVERED!"}</h2><p className="mt-2 text-sm text-white/80">{game.startedFromCity?hud.round.cityDelivered+" of "+game.deliveryGoal+" stops served · "+hud.round.cityAttempts+" gifts dropped.":"You rescued Santa, recovered the village gifts, and delivered them across Midnight Metropolis."}</p><p className="mt-3 text-xs text-white/65">Run time {clockText(game.finishTime)}{!game.startedFromCity&&" · Best "+clockText(best||game.finishTime)}</p><button onClick={()=>{setMenuOpen(false);start(game.express?"express":game.startedFromCity?"city":"northPole")}} className="mt-6 w-full rounded-full bg-[#edcd8b] px-6 py-3 text-sm font-black text-[#122b34] shadow-lg">PLAY AGAIN ↗</button><button className="preview-link" onClick={enterAirport}>Continue to Noel Field ↗</button><button onClick={exit} className="mt-3 w-full rounded-full border border-white/20 px-6 py-2 text-xs font-bold text-white/80">EXIT TO MENU</button></div></div>}
 
       </>}
     </main>

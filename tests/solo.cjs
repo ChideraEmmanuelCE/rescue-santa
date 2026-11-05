@@ -112,3 +112,25 @@ try{
   assert.equal(input.consumeThrow(),null);input.beginThrow();input.release();input.endThrow();assert.equal(input.consumeThrow(),null);
   console.log("PASS: tap, charged release and cancelled input");
 }finally{Object.defineProperty(global,"performance",{configurable:true,value:realClock});}
+
+const {Airfield}=require("../lib/Airfield.ts");
+const mail=new Airfield();
+const fly=(seconds,turn=0,pitch=0)=>{for(let i=0;i<Math.round(seconds*60);i++)mail.step(1/60,{turn,pitch});};
+fly(1.5,-1,0);mail.interact();assert.equal(mail.onboard,false,"must reach the aircraft");
+fly(1.5,1,0);mail.interact();assert(mail.onboard);
+for(let i=0;i<4;i++)mail.setPower(.25);
+fly(2.5,0,1);assert(mail.airborne);mail.interact();assert(mail.onboard,"cannot exit in flight");
+fly(2.2,0,.85);fly(.3,.5);assert(mail.heading>.04);
+fly(.3,-.5);assert(Math.abs(mail.heading)<.002);
+for(let i=0;i<400 && mail.z> -745;i++)fly(.1);
+assert(mail.z<=-745);
+mail.setPower(-.75);
+for(let i=0;i<400 && mail.y>1.2;i++){fly(.05,0,-.85);assert(mail.onboard);}
+for(let i=0;i<400 && mail.airborne;i++)fly(.05,0,-.35);
+assert.equal(mail.airborne,false);
+assert.equal(mail.groundField,1);mail.setPower(-1);fly(4);
+assert(mail.canExit);mail.interact();assert.equal(mail.parcels,1);assert.equal(mail.onboard,false);
+mail.interact();assert(mail.onboard,"can reboard after unloading");
+mail.recover();assert.equal(mail.parcels,1);assert.equal(mail.station,1);
+assert.equal(mail.destination.name,"Noel Field");
+console.log("PASS: walk, proximity boarding, power, bank, takeoff, controlled approach, touchdown, unloading and reboarding");

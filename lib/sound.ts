@@ -58,3 +58,20 @@ export function playCue(cue: Cue){
     note.start(t);note.stop(end+.01);
   });
 }
+
+// One engine voice per aircraft. It shares the game's master mute and follows propeller RPM.
+export function airplaneEngine(){
+  if(!ctx||!master)return;
+  const audio=ctx,engine=audio.createOscillator(),filter=audio.createBiquadFilter(),gain=audio.createGain();
+  engine.type="sawtooth";filter.type="lowpass";filter.Q.value=.4;gain.gain.value=0;
+  engine.connect(filter).connect(gain).connect(master);engine.start();
+  return {
+    update(power:number,running:boolean){
+      const now=audio.currentTime;
+      engine.frequency.setTargetAtTime(35+power*60,now,.12);
+      filter.frequency.setTargetAtTime(150+power*455,now,.12);
+      gain.gain.setTargetAtTime(running?.035+power*.04:0,now,.12);
+    },
+    stop(){engine.stop();engine.disconnect();filter.disconnect();gain.disconnect();}
+  };
+}
