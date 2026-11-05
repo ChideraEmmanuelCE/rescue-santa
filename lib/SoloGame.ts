@@ -1,5 +1,5 @@
 import type { EnemyState, GameEvent, PlayerState, RoundState } from "./protocol";
-import { collidesWorld, enemyPosition, ENEMY_COUNT, INTERACTION_RANGE, RESCUE_DURATION_MS, spawnPosition, wallAt, SLEIGH_Z, SUPPLIES, VILLAGE_GIFTS, FLIGHT_DURATION_MS, CITY_TARGETS, CITY_SPEED, CITY_LENGTH, CITY_CRUISE_ALTITUDE, CITY_REQUIRED_DELIVERIES } from "./world";
+import { collidesWorld, enemyPosition, ENEMY_COUNT, INTERACTION_RANGE, RESCUE_DURATION_MS, spawnPosition, wallAt, SLEIGH_Z, SUPPLIES, VILLAGE_GIFTS, FLIGHT_DURATION_MS, CITY_TARGETS, EXPRESS_STOPS, CITY_SPEED, CITY_LENGTH, CITY_CRUISE_ALTITUDE, CITY_REQUIRED_DELIVERIES } from "./world";
 
 type Enemy = EnemyState & {nextAttack:number};
 const freshRound = (round:number): RoundState => ({round,status:"playing",progress:0,resetAt:0,escort:0,blocked:false,giftCount:0,cityDistance:0,cityX:0,cityAltitude:0,cityDelivered:0,cityAttempts:0,cityPass:1});
@@ -13,6 +13,10 @@ export default class SoloGame {
   roundStarted=0;
   finishTime=0;
   startedFromCity=false;
+  express=false;
+  get deliveryStops(){return this.express ? EXPRESS_STOPS : CITY_TARGETS;}
+  get deliveryGoal(){return this.express ? EXPRESS_STOPS.length : CITY_REQUIRED_DELIVERIES;}
+
   broken=new Set<number>();
   collected=new Set<number>();
   villageCollected=new Set<number>();
@@ -41,14 +45,14 @@ export default class SoloGame {
   }
   private emit(event:GameEvent){for(const fn of this.effects)fn(event);}
   start(){
-    this.time=Date.now(); this.roundStarted=this.time;this.finishTime=0;this.startedFromCity=false;this.remainder=0; this.round=freshRound(1);
+    this.time=Date.now(); this.roundStarted=this.time;this.finishTime=0;this.startedFromCity=false;this.express=false;this.remainder=0; this.round=freshRound(1);
     this.myPlayer={...spawnPosition(0),yaw:0,health:100,deadUntil:0,stunnedUntil:0,score:0,kills:0};
     this.broken.clear();this.collected.clear();this.villageCollected.clear();this.cityDeliveredTargets.clear();this.cityPending=[];this.lastCityDrop=-Infinity;this.citySteer={x:0,z:0};this.cityDropSerial=0;this.respawn(); this.seedEnemies(); this.publish();
   }
   /** Owner-friendly instant city preview; it never replaces or resets the adventure. */
-  startCityPreview(){
+  startCityPreview(express=false){
     this.start();
-    this.startedFromCity=true;
+    this.startedFromCity=true;this.express=express;
     this.round.status="city";this.round.cityDistance=0;this.round.cityX=0;this.round.cityAltitude=0;
     this.round.cityDelivered=0;this.round.cityAttempts=0;this.round.cityPass=1;
     this.enemies.clear();
@@ -81,7 +85,7 @@ export default class SoloGame {
     const r=this.round;
     const wind=Math.sin(r.cityDistance*.009)*1.6;
     let closest:{target:(typeof CITY_TARGETS)[number];distance:number;impactX:number;impactZ:number;flightMs:number}|null=null;
-    for(const target of CITY_TARGETS){
+    for(const target of this.deliveryStops){
       if(this.cityDeliveredTargets.has(target.id)||this.cityPending.some(d=>d.targetId===target.id))continue;
       const flight=Math.sqrt(Math.max(1,2*(altitude-target.y)/9.81));
       const impactX=r.cityX+wind*flight*.38;
@@ -197,15 +201,17 @@ export default class SoloGame {
         r.cityDelivered=this.cityDeliveredTargets.size;
         this.emit({type:"presentLanded",hit:didHit,count:r.cityDelivered,targetId:didHit?pending.targetId:null});
       }
-      if(r.cityDelivered>=CITY_REQUIRED_DELIVERIES){
+      if(r.cityDelivered>=this.deliveryGoal){
         r.status="rescued";this.finishTime=this.time-this.roundStarted;p.score++;
+      } else if(this.express && r.cityDistance>=CITY_LENGTH){
+        r.status="routeEnded";this.finishTime=this.time-this.roundStarted;
       } else if(r.cityDistance>=CITY_LENGTH){
         r.cityDistance=0;r.cityPass++;
         this.emit({type:"cityPass",pass:r.cityPass});
       }
       this.publish();return;
     }
-    if(this.round.status==="rescued"){this.publish();return;}
+    if(this.round.status==="rescued" || this.round.status==="routeEnded")return;
     if(p.deadUntil && p.deadUntil<=this.time)this.respawn();
     for(const e of this.enemies.values()){
       if(e.downUntil>this.time||e.stunnedUntil>this.time)continue;

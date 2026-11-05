@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { memo, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject, RefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Billboard, Html, Sky, Stars } from "@react-three/drei";
@@ -298,7 +298,7 @@ function World({ game, input, lowPower }: { game: SoloGame; input: InputControll
   return <>
     <color attach="background" args={["#a6bac8"]} />
     <fogExp2 attach="fog" args={["#b8cdd2", .007]} />
-    <ResolutionBudget mobile={lowPower}/><WinterLight lowPower={lowPower} />
+    <WinterLight lowPower={lowPower} />
     <Physics gravity={[0, -24, 0]} timeStep={1 / 60} interpolate>
       <Ground />
       <Scenery lowPower={lowPower}/><ForestCollisions/>
@@ -323,18 +323,21 @@ function World({ game, input, lowPower }: { game: SoloGame; input: InputControll
   </>;
 }
 
-export default function GameScene({ game, input, lowPower }: {
+function GameScene({ game, input, lowPower }: {
   game: SoloGame; input: InputController; lowPower: boolean;
 }) {
   const phase=useSyncExternalStore(game.subscribe,()=>game.round.status,()=> "playing" as const);
   const chapterTwo=phase==="flight"||phase==="village"||phase==="cityLaunch";
-  const city=phase==="city"||phase==="rescued";
+  const city=phase==="city"||phase==="rescued"||phase==="routeEnded";
   return <div className="absolute inset-0">
     <Canvas shadows dpr={lowPower ? [1, 1.4] : [1, 1.8]}
       camera={{ position: [0, 5, 43], fov: 66, near: .1, far: 450 }}
       gl={{ antialias: !lowPower, alpha: false, powerPreference: "high-performance" }}
       onCreated={({ gl }) => { gl.outputColorSpace = THREE.SRGBColorSpace; gl.toneMapping = THREE.ACESFilmicToneMapping; gl.toneMappingExposure = 1.07; }}>
-      <Suspense fallback={null}>{city?<CityChapter game={game} input={input} lowPower={lowPower}/>:chapterTwo?<SkyChapter game={game} input={input} lowPower={lowPower}/>:<World game={game} input={input} lowPower={lowPower} />}</Suspense>
+      <ResolutionBudget mobile={lowPower}/><Suspense fallback={null}>{city?<CityChapter game={game} input={input} lowPower={lowPower}/>:chapterTwo?<SkyChapter game={game} input={input} lowPower={lowPower}/>:<World game={game} input={input} lowPower={lowPower} />}</Suspense>
     </Canvas>
   </div>;
 }
+
+// HUD updates arrive at 10 Hz. The scene subscribes to chapter changes itself.
+export default memo(GameScene);

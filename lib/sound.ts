@@ -32,3 +32,29 @@ export function sound(kind:"fire"|"step"|"hit"|"jump"|"clear"|"charge"|"bell",vo
     }
   }
 }
+
+type Cue = "launch" | "drop" | "delivery" | "miss" | "flight" | "city";
+const scores: Record<Cue, readonly number[]> = {
+  launch: [392, 494, 587, 784], drop: [880, 659, 440],
+  delivery: [659, 830, 988, 1318], miss: [330, 247],
+  flight: [392, 587, 740, 659, 494, 587],
+  city: [330, 494, 587, 494, 392, 370]
+};
+/** Short original phrases scheduled on the audio clock, independent of render speed. */
+export function playCue(cue: Cue){
+  if(!ctx || !master || muted || ctx.state!=="running")return;
+  const ambient=cue==="flight"||cue==="city";
+  const spacing=ambient?.44:cue==="drop"?.055:.12;
+  scores[cue].forEach((frequency,i)=>{
+    const audio=ctx!, note=audio.createOscillator(), gain=audio.createGain();
+    const t=audio.currentTime+.02+i*spacing, end=t+(ambient?1.1:.42);
+    note.type=cue==="miss"||cue==="city"?"triangle":"sine";
+    note.frequency.value=frequency;
+    gain.gain.setValueAtTime(.0001,t);
+    gain.gain.exponentialRampToValueAtTime(ambient?.024:.065,t+.012);
+    gain.gain.exponentialRampToValueAtTime(.0001,end);
+    note.connect(gain).connect(master!);
+    note.onended=()=>{note.disconnect();gain.disconnect();};
+    note.start(t);note.stop(end+.01);
+  });
+}

@@ -8,6 +8,7 @@ import SoloGame from "@/lib/SoloGame";
 import {InputController} from "@/lib/InputController";
 import type {GameEvent} from "@/lib/protocol";
 import {CITY_CRUISE_ALTITUDE,CITY_LENGTH,CITY_SPEED,CITY_TARGETS,random01,type CityTarget} from "@/lib/world";
+import {Powder} from "./WinterLight";
 import {FlyingSleigh} from "./SkyChapter";
 
 const roadEnd=-CITY_LENGTH/2;
@@ -307,7 +308,7 @@ function PredictedLanding({game}:{game:SoloGame}){
 }
 function CityTargets({game}:{game:SoloGame}){
  useSyncExternalStore(game.subscribe,()=>game.round.cityDelivered,()=>0);
- return <>{CITY_TARGETS.map(target=><DeliveryZone key={target.id} target={target} delivered={game.cityDeliveredTargets.has(target.id)}/>)}</>;
+ return <>{game.deliveryStops.map(target=><DeliveryZone key={target.id} target={target} delivered={game.cityDeliveredTargets.has(target.id)}/>)}</>;
 }
 
 type PresentEvent=Extract<GameEvent,{type:"presentDrop"}>&{created:number};
@@ -339,39 +340,16 @@ function FallingGifts({game}:{game:SoloGame}){
  return <>{items.map(g=><FallingGift key={g.key} gift={g} game={game} done={key=>setItems(old=>old.filter(v=>v.key!==key))}/>)}</>;
 }
 
-function SnowInMotion({lowPower,game}:{lowPower:boolean;game:SoloGame}){
- const group=useRef<T.Group>(null),mesh=useRef<T.Points>(null);
- const count=lowPower?390:980;
- const values=useMemo(()=>{
-   const p=new Float32Array(count*3);
-   for(let i=0;i<count;i++){p[i*3]=(random01(i*5+7)-.5)*90;p[i*3+1]=(random01(i*17+6)-.5)*65;p[i*3+2]=(random01(i*11+9)-.5)*120;}
-   return p;
- },[count]);
- useFrame((_,dt)=>{
-   if(group.current)group.current.position.set(game.round.cityX,CITY_CRUISE_ALTITUDE+game.round.cityAltitude,-game.round.cityDistance);
-   const a=mesh.current?.geometry.getAttribute("position") as T.BufferAttribute|undefined;
-   if(!a)return;
-   for(let i=0;i<count;i++){
-     let x=a.getX(i)+dt*.8,y=a.getY(i)-dt*(3+i%5),z=a.getZ(i)+dt*.65;
-     if(x>45)x=-45;if(y< -34)y=34;if(z>60)z=-60;
-     a.setXYZ(i,x,y,z);
-   }
-   a.needsUpdate=true;
- });
- return <group ref={group}><points ref={mesh} frustumCulled={false}>
-   <bufferGeometry><bufferAttribute attach="attributes-position" args={[values,3]}/></bufferGeometry>
-   <pointsMaterial size={.19} color="#e4f5fc" transparent opacity={.8} depthWrite={false} sizeAttenuation/>
- </points></group>;
-}
-
 function CityFollow({game,input,lowPower}:{game:SoloGame;input:InputController;lowPower:boolean}){
  const {camera}=useThree();
  const sleigh=useRef<T.Group>(null),focus=useRef(new T.Vector3());
  const desired=useMemo(()=>new T.Vector3(),[]);
  const center=useMemo(()=>new T.Vector3(),[]);
  const entry=useRef(game.now());
+ const focusTarget=useMemo(()=>new T.Vector3(),[]);
  useFrame((_,dt)=>{
-   game.setCitySteering(input.getMovement().x,input.getMovement().z);
+   const movement=input.getMovement();
+   game.setCitySteering(movement.x,movement.z);
    game.advance(dt);
    const r=game.round;
    const altitude=CITY_CRUISE_ALTITUDE+r.cityAltitude;
@@ -379,17 +357,17 @@ function CityFollow({game,input,lowPower}:{game:SoloGame;input:InputController;l
    center.set(r.cityX,altitude+bob,-r.cityDistance);
    if(sleigh.current){
      sleigh.current.position.lerp(center,1-Math.exp(-dt*6));
-     sleigh.current.rotation.z=T.MathUtils.damp(sleigh.current.rotation.z,-input.getMovement().x*.15,5,dt);
-     sleigh.current.rotation.x=T.MathUtils.damp(sleigh.current.rotation.x,-input.getMovement().z*.05,5,dt);
+     sleigh.current.rotation.z=T.MathUtils.damp(sleigh.current.rotation.z,-movement.x*.15,5,dt);
+     sleigh.current.rotation.x=T.MathUtils.damp(sleigh.current.rotation.x,-movement.z*.05,5,dt);
    }
    const cinematic=T.MathUtils.smoothstep((game.now()-entry.current)/1000,0,5);
    desired.set(center.x+T.MathUtils.lerp(27,9.5,cinematic),center.y+T.MathUtils.lerp(15,6.3,cinematic),center.z+T.MathUtils.lerp(35,22,cinematic));
    camera.position.lerp(desired,1-Math.exp(-dt*2.8));
-   focus.current.lerp(new T.Vector3(center.x,center.y-8,center.z-35),1-Math.exp(-dt*3.6));
+   focus.current.lerp(focusTarget.set(center.x,center.y-8,center.z-35),1-Math.exp(-dt*3.6));
    camera.lookAt(focus.current);
    if(camera instanceof T.PerspectiveCamera){
-     const fov=lowPower?65:62;
-     camera.fov=T.MathUtils.damp(camera.fov,fov,3,dt);camera.updateProjectionMatrix();
+     const fov=camera.aspect<1?77:lowPower?65:62;
+     if(Math.abs(camera.fov-fov)>.02){camera.fov=T.MathUtils.damp(camera.fov,fov,3,dt);camera.updateProjectionMatrix();}
    }
  });
  return <group ref={sleigh} position={[0,CITY_CRUISE_ALTITUDE,0]}><FlyingSleigh game={game}/></group>;
@@ -414,7 +392,7 @@ export default function CityChapter({game,input,lowPower}:{game:SoloGame;input:I
    <PredictedLanding game={game}/>
    <CityFollow game={game} input={input} lowPower={lowPower}/>
    <FallingGifts game={game}/>
-   <SnowInMotion lowPower={lowPower} game={game}/>
+   <Powder count={lowPower?390:980}/>
    <pointLight position={[0,32,-520]} color="#9ac3ff" intensity={70} distance={135}/>
  </>;
 }

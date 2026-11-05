@@ -69,6 +69,24 @@ game.stop();assert.equal(game.myPlayer,null);game.startCityPreview();
 assert.equal(game.startedFromCity,true);assert.equal(game.round.status,"city");
 assert.equal(game.round.cityDelivered,0);
 game.start();assert.equal(game.startedFromCity,false);assert.equal(game.myPlayer.score,0);
+// Fly the express manifest using only steering and drops, at real simulation speed.
+game.startCityPreview(true);
+assert.equal(game.deliveryGoal,3);
+for(let tick=0;tick<800 && game.round.status==="city";tick++){
+  const next=game.deliveryStops.find(stop=>!game.cityDeliveredTargets.has(stop.id));
+  game.setCitySteering(Math.sign(next.x-game.round.cityX),0);
+  if(game.getCityAim()?.aligned)game.dropPresent();
+  advance(100);
+}
+assert.equal(game.round.status,"rescued");
+assert.deepEqual([...game.cityDeliveredTargets],[0,4,8]);
+game.startCityPreview(true);advance(80000);
+assert.equal(game.round.status,"routeEnded");assert.equal(game.myPlayer.score,0);
+game.startCityPreview();
+assert.equal(game.deliveryGoal,CITY_REQUIRED_DELIVERIES);
+assert.equal(game.cityDeliveredTargets.size,0);
+game.start();
+console.log("PASS: express steering, all three named stops, missed route, retry and campaign isolation");
 // The first south barricade lies directly between the scout and the target.
 for(const e of game.enemies.values())e.downUntil=game.now()+60000;
 const target=game.enemies.get(4);target.downUntil=0;target.x=6;target.z=20;

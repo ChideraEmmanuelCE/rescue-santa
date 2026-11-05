@@ -23,3 +23,40 @@ button { touch-action: manipulation; cursor: pointer; }
 
 .reticle[data-active=true]::after{content:"";position:absolute;width:32px;height:32px;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);background:conic-gradient(#ffcf80 var(--charge),#152c3e80 0);mask:radial-gradient(transparent 55%,#000 58%);-webkit-mask:radial-gradient(transparent 55%,#000 58%)}
 .exp-best{font:600 12px system-ui;color:#ffe0ad;margin:0 0 8px}
+.mission-options{display:flex;width:max-content;max-width:100%;margin-top:1.2rem;border:1px solid #e4cbb65c;border-radius:6px;background:#0c1e29e8;overflow:hidden}
+.mission-options button{min-height:40px;padding:6px 10px;font:650 12px/1.15 system-ui;color:#d7e4e5}
+.mission-options button[aria-pressed=true]{background:#e7d3b4;color:#172a34}
+.preview-link{display:block;margin-top:5px;min-height:36px;text-align:left;color:#ffdbab;font:600 13px system-ui;text-decoration:underline;text-underline-offset:3px}
+.hud-top{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
+.actions-right{right:max(12px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom))}
+.menu-panel,.result-card{max-height:calc(100dvh - 84px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;overscroll-behavior:contain;touch-action:pan-y}
+.result-card{max-height:calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+.hit-notice{width:max-content;max-width:80vw;text-align:center}
+@media(orientation:portrait){
+ .lobby{display:flex;flex-direction:column;justify-content:safe center;padding:70px max(6vw,env(safe-area-inset-right)) 55px max(6vw,env(safe-area-inset-left))}
+ .brief{width:min(100%,420px);margin:0;top:auto;transform:none}
+
+ .hud-top section{max-width:calc(100% - 70px)}
+ .hit-notice{top:36%;padding:7px 14px;font-size:12px}
+}
+@media(orientation:landscape) and (max-height:525px){
+ .lobby{display:grid;align-content:safe center;padding:42px max(6vw,env(safe-area-inset-right)) 22px max(6vw,env(safe-area-inset-left))}
+ .brief{width:min(51vw,480px);margin:0;top:auto;transform:none}
+ .brief .kicker{display:none}.brief h1{font-size:clamp(34px,10dvh,51px)}
+ .mission-options{margin-top:8px}.mission-options button{min-height:32px}
+ .story{margin:6px 0}.preview-link{min-height:28px}.result-card{padding:14px 20px}
+ .hud-top section{padding:7px 10px}.hit-notice{font-size:12px;padding:6px 12px}
+ .actions-right button[aria-label]{max-width:64px;max-height:64px}
+}
+/* Let the objective occupy a real grid cell, even with large system fonts. */
+.hud-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,32%) minmax(0,1fr);align-items:start}
+.hud-top>section{max-width:100%;justify-self:start}
+.hud-top>.objective-pill{position:static;transform:none;translate:none;width:100%;align-self:start}
+.hud-top>.pointer-events-auto{justify-self:end}
+@media(orientation:portrait){
+ .hud-top{grid-template-columns:minmax(0,1fr) auto;row-gap:6px}
+ .hud-top>.objective-pill{grid-column:1/-1;grid-row:2;width:min(88%,290px);justify-self:center}
+ .hud-top>.pointer-events-auto{grid-column:2;grid-row:1}
+}
+
+.key-guide{width:max-content;max-width:94vw;white-space:normal;text-align:center}

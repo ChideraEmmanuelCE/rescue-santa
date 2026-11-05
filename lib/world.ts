@@ -108,3 +108,6 @@ export const CITY_TARGETS: readonly CityTarget[] = [
   {id:9,x:-20,z:-968,y:1,radius:17,name:"Central Park",kind:"street"},
   {id:10,x:22,z:-1065,y:12,radius:18,name:"Last Stop",kind:"roof"}
 ] as const;
+
+// The express manifest follows the same coordinates and ballistics as campaign deliveries.
+export const EXPRESS_STOPS = CITY_TARGETS.filter(target => [0, 4, 8].includes(target.id));

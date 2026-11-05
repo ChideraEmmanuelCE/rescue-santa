@@ -5,9 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { InputController } from "@/lib/InputController";
 import SoloGame from "@/lib/SoloGame";
-import {enableSound,sound,suspendSound,setMuted} from "@/lib/sound";
+import {enableSound,playCue,sound,suspendSound,setMuted} from "@/lib/sound";
 const LobbyVista=dynamic(()=>import("./LobbyVista"),{ssr:false});
-import { INTERACTION_RANGE, CITY_REQUIRED_DELIVERIES } from "@/lib/world";
+import { INTERACTION_RANGE, CITY_LENGTH, CITY_SPEED } from "@/lib/world";
 
 const GameScene = dynamic(() => import("./GameScene"), {
   ssr: false,
@@ -71,6 +71,7 @@ export default function GameClient() {
   const hud = useSyncExternalStore(game.subscribe, game.getSnapshot, game.getSnapshot);
   const [graphics,setGraphics]=useState<boolean|null>(null);
   const [best,setBest]=useState(0);
+  const [mission,setMission]=useState<"northPole"|"express">("northPole");
   const [started, setStarted] = useState(false);
 
   const [isTouch, setIsTouch] = useState(false);
@@ -82,7 +83,7 @@ export default function GameClient() {
   const [hitText, setHitText] = useState("");
 
   useEffect(() => {
-    try{setBest(Number(localStorage.getItem("santa-solo-best-ms"))||0);}catch{}
+    try{const muted=localStorage.getItem("santa-muted")==="true";setMuted(muted);setSilent(muted);setBest(Number(localStorage.getItem("santa-solo-best-ms"))||0);}catch{}
     const probe=document.createElement("canvas").getContext("webgl2");
     setGraphics(Boolean(probe));probe?.getExtension("WEBGL_lose_context")?.loseContext();
 
@@ -90,18 +91,13 @@ export default function GameClient() {
     return () => { game.stop(); };
   }, [game]);
 
-  const start = useCallback((chapter:"northPole"|"city"="northPole") => {
+  const start = useCallback((chapter:"northPole"|"city"|"express"="northPole") => {
 
     input.reset();
     if(!graphics)return;
     enableSound();
-    if(window.matchMedia("(pointer:coarse)").matches){
-      const root=document.documentElement;
-      const lock=()=>{const o=screen.orientation as ScreenOrientation & {lock?:(v:string)=>Promise<void>};void o?.lock?.("landscape").catch(()=>{});};
-      if(root.requestFullscreen)void root.requestFullscreen().then(lock).catch(()=>{});else lock();
-    }
     lastWin.current=-1;setHitText("");setDamageFlash(false);
-    if(chapter==="city")game.startCityPreview();else game.start();
+    if(chapter==="northPole")game.start();else game.startCityPreview(chapter==="express");
     setStarted(true);
   }, [input, game, graphics]);
 
@@ -119,7 +115,7 @@ export default function GameClient() {
     const keydown = (e: KeyboardEvent) => {
       if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
       if(menuOpen || (e.target instanceof HTMLInputElement))return;
-      if(game.round.status==="city"&&(e.code==="Space"||e.code==="KeyF")&&!e.repeat){if(game.dropPresent())sound("fire");return;}
+      if(game.round.status==="city"&&(e.code==="Space"||e.code==="KeyF")&&!e.repeat){game.dropPresent();return;}
       if(e.code==="KeyF"&&!e.repeat){input.beginThrow();sound("charge");}
       if (e.repeat && ["Space", "KeyE"].includes(e.code)) return;
       input.keys.add(e.code);
@@ -142,7 +138,7 @@ export default function GameClient() {
     const pointerDown = (e: PointerEvent) => {
       if(menuOpen)return;
       if (!(e.target instanceof HTMLCanvasElement) || e.button !== 0 || isTouch) return;
-      if(game.round.status==="city"){if(game.dropPresent())sound("fire");return;}
+      if(game.round.status==="city"){game.dropPresent();return;}
       if (!document.pointerLockElement) {try{void e.target.requestPointerLock?.()?.catch(()=>{});}catch{}}
       input.beginThrow();sound("charge");
     };
@@ -170,9 +166,10 @@ export default function GameClient() {
   }, [input, game, started, isTouch,menuOpen]);
 
   useEffect(() => game.onEvent((event) => {
-    if(event.type==="cityStarted"){sound("clear");setHitText("CHAPTER III · MIDNIGHT METROPOLIS");}
+    if(event.type==="presentDrop"){playCue("drop");}
+    else if(event.type==="cityStarted"){sound("clear");setHitText(game.express?"EXPRESS · THREE STOPS, ONE PASS":"MIDNIGHT METROPOLIS");}
     else if(event.type==="cityPass"){sound("bell");setHitText("ANOTHER DELIVERY PASS · "+event.pass);}
-    else if(event.type==="presentLanded"){sound(event.hit?"clear":"hit");setHitText(event.hit?"DELIVERED! · "+event.count+"/"+CITY_REQUIRED_DELIVERIES:"MISSED · LINE UP YOUR NEXT DROP");}
+    else if(event.type==="presentLanded"){playCue(event.hit?"delivery":"miss");setHitText(event.hit?"DELIVERED! · "+event.count+"/"+game.deliveryGoal:"MISSED · LINE UP YOUR NEXT DROP");}
     else if(event.type==="gift"){sound("clear");setHitText("MAGIC GIFT RECOVERED · "+event.count+"/5");}
     else if(event.type==="supply"){sound("bell");setHitText("WARMTH KIT · HEALTH RESTORED");}
     else if(event.type==="shatter"){sound("hit");setHitText("ICE SHATTERED");}
@@ -185,6 +182,17 @@ export default function GameClient() {
   }),[game]);
 
   const [silent,setSilent]=useState(false);
+  useEffect(()=>{
+    if(!started)return;
+    const phase=hud.round.status;
+    if(phase==="launching"||phase==="cityLaunch")playCue("launch");
+    if(phase!=="city"&&phase!=="flight")return;
+    const cue=phase==="city"?"city":"flight";
+    const play=()=>{if(!document.hidden)playCue(cue);};
+    play();
+    const timer=window.setInterval(play,5600);
+    return ()=>window.clearInterval(timer);
+  },[started,hud.round.status]);
   const lastWin=useRef(-1);
   useEffect(()=>{if(hud.round.status==="rescued" && lastWin.current!==hud.round.round){lastWin.current=hud.round.round;sound("clear");
     if(!game.startedFromCity && game.finishTime>0 && (!best || game.finishTime<best)){setBest(game.finishTime);try{localStorage.setItem("santa-solo-best-ms",String(game.finishTime));}catch{}}
@@ -201,7 +209,8 @@ export default function GameClient() {
   const cityAim=isCity?game.getCityAim():null;
   const isFlight=hud.round.status==="flight";
   const isVillage=hud.round.status==="village";
-  const isComplete=hud.round.status==="rescued";
+  const missedRoute=hud.round.status==="routeEnded";
+  const isComplete=hud.round.status==="rescued"||missedRoute;
   const chapterTwo=isFlight||isVillage||isCityLaunch||isCity||isComplete;
 
   return (
@@ -213,13 +222,14 @@ export default function GameClient() {
           <section className="brief">
             <p className="kicker">SOLO EXPEDITION &nbsp; / &nbsp; 01</p>
             <h1>Rescue<br/><em>Santa.</em></h1>
-            <p className="story">Follow the lanterns to the ice cage. Pack a snowball to shatter cover, then guard Santa to his sleigh. Fly together over the mountains to Aurora Village, recover five magical presents, then soar over a living Christmas city to make rooftop and street deliveries.</p>
-            {best>0&&<p className="exp-best">Personal best · {clockText(best)}</p>}
-            <form onSubmit={e=>{e.preventDefault();start()}}>
-
-              <button className="deploy" disabled={graphics!==true}>Start expedition <span>↗</span></button>
-            </form>
-            <button type="button" onClick={()=>start("city")} disabled={graphics!==true} className="mt-4 rounded-full border border-[#f3d8a9]/50 bg-[#092737]/80 px-5 py-3 text-sm font-bold text-[#f2dcaa] shadow-xl backdrop-blur-lg disabled:opacity-40">✦ PREVIEW CHAPTER III · FLY OVER THE CITY</button>
+            <div className="mission-options" role="group" aria-label="Choose a mission">
+              <button aria-pressed={mission==="northPole"} onClick={()=>setMission("northPole")}>Adventure</button>
+              <button aria-pressed={mission==="express"} onClick={()=>setMission("express")}>Christmas Eve Express</button>
+            </div>
+            <p className="story">{mission==="express"?"One pass. Deliver to the Toy Workshop, Children’s Hospital, and Riverside School before Santa leaves the city.":"Free Santa, fly to Aurora Village together, then deliver presents across Midnight Metropolis."}</p>
+            {best>0&&mission==="northPole"&&<p className="exp-best">Personal best · {clockText(best)}</p>}
+            <button className="deploy" onClick={()=>start(mission)} disabled={graphics!==true}>{mission==="express"?"Fly express route":"Start expedition"} <span>↗</span></button>
+            <button className="preview-link" onClick={()=>start("city")} disabled={graphics!==true}>Practice city deliveries</button>
             {graphics===false&&<p role="status" className="graphics-note">3D play needs WebGL 2. Open this link in Safari or Chrome with graphics acceleration enabled.</p>}
           </section>
           <footer className="folio"><span>90° N &nbsp; / &nbsp; ARCTIC CIRCLE</span><a href="/credits.txt" target="_blank" rel="noreferrer">ASSET CREDITS</a></footer>
@@ -228,8 +238,8 @@ export default function GameClient() {
         <GameScene game={game} input={input} lowPower={isTouch}/>
         {!chapterTwo&&<AimRing input={input}/>}
         {isTouch && <>
-          {!isFlight&&!isCity&&!isCityLaunch&&<TouchCamera input={input}/>} {!isCityLaunch&&<FloatingJoystick input={input}/>} 
-          <div style={{display:isFlight||isCity||isCityLaunch||isComplete?"none":undefined}} className="pointer-events-auto absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-3 z-40 flex flex-col items-end gap-3">
+          {!isFlight&&!isCity&&!isCityLaunch&&<TouchCamera input={input}/>} {!isCityLaunch&&!isComplete&&hud.round.status!=="launching"&&<FloatingJoystick input={input}/>} 
+          <div style={{display:isFlight||isCity||isCityLaunch||isComplete?"none":undefined}} className="actions-right pointer-events-auto absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-3 z-40 flex flex-col items-end gap-3">
             {canInteract && <button onPointerDown={e=>{e.preventDefault();input.interacting=true;e.currentTarget.setPointerCapture(e.pointerId);game.hold(true)}}
               onPointerUp={()=>{input.interacting=false;game.hold(false)}}
               onPointerCancel={()=>{input.interacting=false;game.hold(false)}}
@@ -242,37 +252,37 @@ export default function GameClient() {
                 className="grid h-[75px] w-[75px] place-content-center rounded-full border border-[#fce0a5]/65 bg-[#174457]/95 shadow-[0_4px_28px_#f6dfa845] backdrop-blur-lg active:scale-95"><span className="text-[29px] leading-7">❄</span><span className="text-[10px] font-black tracking-wide">THROW</span><span className="text-[8px]">Hold to pack</span></button>}
             </div>
           </div>
-          {isCity&&<button aria-label="Drop a present" onClick={()=>{if(game.dropPresent())sound("fire")}} className="pointer-events-auto absolute bottom-[max(2rem,env(safe-area-inset-bottom))] right-4 z-40 flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full border-2 border-[#ffe4aa] bg-gradient-to-b from-[#c64c46] to-[#8b2933] text-white shadow-[0_5px_35px_#f0c88980] active:scale-95"><span className="text-[32px] leading-none">🎁</span><span className="mt-1 text-[12px] font-black tracking-widest">DROP</span></button>}
+          {isCity&&<button aria-label="Drop a present" onClick={()=>{game.dropPresent()}} className="actions-right pointer-events-auto absolute bottom-[max(2rem,env(safe-area-inset-bottom))] right-4 z-40 flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full border-2 border-[#ffe4aa] bg-gradient-to-b from-[#c64c46] to-[#8b2933] text-white shadow-[0_5px_35px_#f0c88980] active:scale-95"><span className="text-[32px] leading-none">🎁</span><span className="mt-1 text-[12px] font-black tracking-widest">DROP</span></button>}
         </>}
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-between gap-2 px-3 pt-[max(1.0rem,env(safe-area-inset-top))]">
+        <div className="hud-top pointer-events-none absolute inset-x-0 top-0 z-30 gap-2 px-3 pt-[max(1.0rem,env(safe-area-inset-top))]">
           <section className="max-w-[68%] rounded-2xl border border-white/15 bg-[#081f2d]/80 p-3 shadow-lg backdrop-blur-lg">
             <div className="text-[12px] font-black tracking-widest">{isCity||isComplete?"✦ MIDNIGHT METROPOLIS":isCityLaunch?"✦ CITY DEPARTURE":chapterTwo?"✦ AURORA VALLEY":"✦ RESCUE SANTA"}</div>
-            <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-white/70">{isCity||isComplete?"CHAPTER III · DELIVERY RUN":isCityLaunch?"CHAPTER III · TAKEOFF":isFlight?"CHAPTER II · SLEIGH FLIGHT":chapterTwo?"CHAPTER II · "+hud.round.giftCount+"/5 GIFTS":"SOLO · ROUND "+hud.round.round}</div>
-            <div className="mt-2 flex items-center gap-1.5"><div className="h-[6px] w-[95px] overflow-hidden rounded-full bg-[#a51f34]/40 sm:w-[150px]"><div className="h-full rounded-full bg-gradient-to-r from-red-600 via-amber-300 to-lime-300 transition-[width]" style={{width:`${isCity||isComplete?Math.min(100,hud.round.cityDelivered/CITY_REQUIRED_DELIVERIES*100):health}%`}}/></div><span className="text-[10px] font-black text-white">{isCity||isComplete?`${hud.round.cityDelivered}/${CITY_REQUIRED_DELIVERIES}`:`${health} HP`}</span></div>
+            <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-white/70">{game.express?"EXPRESS · "+clockText(Math.max(0,(CITY_LENGTH-hud.round.cityDistance)/CITY_SPEED*1000)):isCity||isComplete?"CHAPTER III · DELIVERY RUN":isCityLaunch?"CHAPTER III · TAKEOFF":isFlight?"CHAPTER II · SLEIGH FLIGHT":chapterTwo?"CHAPTER II · "+hud.round.giftCount+"/5 GIFTS":"SOLO · ROUND "+hud.round.round}</div>
+            <div className="mt-2 flex items-center gap-1.5"><div className="h-[6px] w-[95px] overflow-hidden rounded-full bg-[#a51f34]/40 sm:w-[150px]"><div className="h-full rounded-full bg-gradient-to-r from-red-600 via-amber-300 to-lime-300 transition-[width]" style={{width:`${isCity||isComplete?Math.min(100,hud.round.cityDelivered/game.deliveryGoal*100):health}%`}}/></div><span className="text-[10px] font-black text-white">{isCity||isComplete?`${hud.round.cityDelivered}/${game.deliveryGoal}`:`${health} HP`}</span></div>
           </section>
+        <div className="objective-pill pointer-events-none">
+          <div className="rounded-full border border-white/15 bg-[#071927]/70 px-3 py-2 text-center text-[10px] font-bold text-white/90 shadow-lg backdrop-blur-lg">{isCityLaunch?"NEXT STOP · MIDNIGHT METROPOLIS":isCity?(cityAim?.aligned?"DROP NOW · "+cityAim.target.name:"AIM FOR "+(cityAim?.target.name??"THE DELIVERY ZONES")):isFlight?"FLY THE SLEIGH · STEER THROUGH THE MOUNTAINS":isVillage?"FIND ALL FIVE GIFTS · "+hud.round.giftCount+"/5":isComplete?"ROUTE COMPLETE":hud.round.status==="launching"?"BOARDING SANTA'S SLEIGH":hud.round.status==="escort"?(hud.round.blocked?"CLEAR THE SNOWMEN NEAR SANTA":"STAY CLOSE · ESCORT SANTA"):isStunned&&!isDead?"SNOWMAN ATTACK! FIGHT BACK":canInteract?"HOLD TO RESCUE SANTA":isDead?"YOU HAVE BEEN DEFEATED":"REACH THE ICE CAGE"}</div>
+          {(isFlight||hud.round.status==="escort"||hud.round.status==="playing"&&hud.round.progress>0)&&<div className="mt-2 h-[5px] overflow-hidden rounded-full bg-black/40"><div className="h-full rounded-full bg-amber-300 transition-[width]" style={{width:`${(hud.round.status==="escort"?hud.round.escort:hud.round.progress)*100}%`}}/></div>}
+        </div>
+
           <div className="pointer-events-auto relative">
             <button aria-label="Game menu" onClick={()=>{input.release();game.hold(false);setMenuOpen(v=>!v)}} className="flex h-[43px] items-center gap-2 rounded-2xl border border-white/20 bg-[#081f2d]/85 px-4 text-[13px] font-black backdrop-blur-lg"><span className="text-lg">☰</span><span className="hidden sm:inline">MENU</span></button>
-            {menuOpen && <div className="absolute right-0 top-[49px] w-[215px] rounded-2xl border border-white/15 bg-[#081b2a]/95 p-4 shadow-2xl backdrop-blur-xl">
+            {menuOpen && <div className="menu-panel absolute right-0 top-[49px] w-[215px] rounded-2xl border border-white/15 bg-[#081b2a]/95 p-4 shadow-2xl backdrop-blur-xl">
               <div className="mb-3 text-xs font-black text-[#f0d49c]">EXPEDITION STATS</div>
-              <div className="text-[12px]">Village gifts: {hud.round.giftCount}/5 · City deliveries: {hud.round.cityDelivered}/{CITY_REQUIRED_DELIVERIES}</div>
+              <div className="text-[12px]">Village gifts: {hud.round.giftCount}/5 · City deliveries: {hud.round.cityDelivered}/{game.deliveryGoal}</div>
               <div className="mt-3 border-t border-white/15 pt-2 text-[11px] text-white/70">Defeated: {hud.me?.kills??0} snowmen</div>
-              <button className="sound-toggle" onClick={()=>{setMuted(!silent);setSilent(!silent)}}>Sound {silent?"off":"on"}</button>
+              <button className="sound-toggle" onClick={()=>{setMuted(!silent);setSilent(!silent);try{localStorage.setItem("santa-muted",String(!silent))}catch{}}}>Sound {silent?"off":"on"}</button>
 
               <button onClick={()=>{setMenuOpen(false);exit()}} className="mt-2 w-full rounded-lg border border-rose-200/25 bg-red-800/25 px-2 py-2 text-xs font-black">EXIT GAME</button>
             </div>}
           </div>
         </div>
-        <div className="pointer-events-none absolute left-1/2 top-[max(.8rem,env(safe-area-inset-top))] z-20 w-[min(240px,32vw)] -translate-x-1/2">
-          <div className="rounded-full border border-white/15 bg-[#071927]/70 px-3 py-2 text-center text-[10px] font-bold text-white/90 shadow-lg backdrop-blur-lg">{isCityLaunch?"NEXT STOP · MIDNIGHT METROPOLIS":isCity?(cityAim?.aligned?"DROP NOW · "+cityAim.target.name:"AIM FOR "+(cityAim?.target.name??"THE DELIVERY ZONES")):isFlight?"FLY THE SLEIGH · STEER THROUGH THE MOUNTAINS":isVillage?"FIND ALL FIVE GIFTS · "+hud.round.giftCount+"/5":isComplete?"AURORA VALLEY SAVED!":hud.round.status==="launching"?"BOARDING SANTA'S SLEIGH":hud.round.status==="escort"?(hud.round.blocked?"CLEAR THE SNOWMEN NEAR SANTA":"STAY CLOSE · ESCORT SANTA"):isStunned&&!isDead?"SNOWMAN ATTACK! FIGHT BACK":canInteract?"HOLD TO RESCUE SANTA":isDead?"YOU HAVE BEEN DEFEATED":"REACH THE ICE CAGE"}</div>
-          {(isFlight||hud.round.status==="escort"||hud.round.status==="playing"&&hud.round.progress>0)&&<div className="mt-2 h-[5px] overflow-hidden rounded-full bg-black/40"><div className="h-full rounded-full bg-amber-300 transition-[width]" style={{width:`${(hud.round.status==="escort"?hud.round.escort:hud.round.progress)*100}%`}}/></div>}
-        </div>
-        <div className="rotate-hint">Rotate your phone for landscape play</div>
-        {!isTouch && <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#091d2b]/75 px-4 py-2 text-[11px] font-bold text-white/80">{isCity?"WASD STEER SLEIGH · SPACE / F / CLICK TO DROP PRESENT":isFlight?"WASD / ARROW KEYS TO STEER SANTA'S SLEIGH":isVillage?"WASD MOVE · MOUSE TO LOOK · COLLECT ALL FIVE GIFTS":lookLocked?"WASD MOVE · MOUSE AIM · HOLD & RELEASE TO THROW · SPACE JUMP · E HOLD":"CLICK TO AIM · WASD MOVE · F FIRE · SPACE JUMP · E RESCUE"}</div>}
-        {hitText && <div className="pointer-events-none absolute left-1/2 top-[28%] z-40 -translate-x-1/2 rounded-full border border-white/20 bg-[#092534]/85 px-6 py-3 text-[16px] font-black tracking-wide text-[#fce1b1] shadow-xl backdrop-blur-xl">{hitText}</div>}
+        {!isTouch && <div className="key-guide pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#091d2b]/75 px-4 py-2 text-[11px] font-bold text-white/80">{isCity?"WASD STEER SLEIGH · SPACE / F / CLICK TO DROP PRESENT":isFlight?"WASD / ARROW KEYS TO STEER SANTA'S SLEIGH":isVillage?"WASD MOVE · MOUSE TO LOOK · COLLECT ALL FIVE GIFTS":lookLocked?"WASD MOVE · MOUSE AIM · HOLD & RELEASE TO THROW · SPACE JUMP · E HOLD":"CLICK TO AIM · WASD MOVE · F FIRE · SPACE JUMP · E RESCUE"}</div>}
+        {hitText && <div className="hit-notice pointer-events-none absolute left-1/2 top-[28%] z-40 -translate-x-1/2 rounded-full border border-white/20 bg-[#092534]/85 px-6 py-3 text-[16px] font-black tracking-wide text-[#fce1b1] shadow-xl backdrop-blur-xl">{hitText}</div>}
         {damageFlash && <div className="pointer-events-none absolute inset-0 z-30 border-[9px] border-red-500/75 bg-red-700/15"/>}
         {isDead&&<div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[#170d19]/55 p-5 backdrop-blur-sm"><div className="rounded-3xl border border-rose-300/30 bg-[#1a1424]/95 p-8 text-center shadow-2xl"><div className="text-5xl">💀</div><h2 className="mt-3 text-3xl font-black">YOU WERE DEFEATED</h2><p className="mt-2 text-sm text-white/70">Snowmen caught you. Respawning in {Math.max(1,Math.ceil((deadUntil-game.now())/1000))}s</p><p className="mt-2 text-xs text-rose-200">Use snowballs to keep them away next time.</p></div></div>}
-        {isCity&&<div className="pointer-events-none absolute bottom-[max(2rem,env(safe-area-inset-bottom))] right-4 z-30 hidden sm:block rounded-2xl border border-white/20 bg-[#081b2a]/85 px-4 py-3 text-center text-xs font-bold text-[#ffe2ae]">DROP · SPACE / F<br />{cityAim?.aligned?"TARGET ALIGNED ✓":"STEER TO A LIT DROP ZONE"}<div className="mt-1 text-[10px] text-white/70">PASS {hud.round.cityPass} · {hud.round.cityDelivered}/{CITY_REQUIRED_DELIVERIES} DELIVERIES</div></div>}
-        {isComplete && <div className="pointer-events-auto absolute inset-0 z-40 grid place-items-center bg-[#041723]/65 p-4 backdrop-blur-md"><div className="max-w-[400px] rounded-3xl border border-amber-200/35 bg-[#092431]/95 p-8 text-center shadow-2xl"><div className="text-5xl">🎁</div><p className="mt-3 text-xs font-bold tracking-[.25em] text-amber-200">ALL THREE CHAPTERS COMPLETE</p><h2 className="mt-2 text-3xl font-black text-[#f0d59f]">CHRISTMAS DELIVERED!</h2><p className="mt-2 text-sm text-white/80">You rescued Santa, crossed Aurora Valley, then delivered presents over the rooftops and streets of Midnight Metropolis.</p><p className="mt-3 text-xs text-white/65">Adventure time {clockText(game.finishTime)} · Best {clockText(best||game.finishTime)}</p><button onClick={()=>{setMenuOpen(false);start()}} className="mt-6 w-full rounded-full bg-[#edcd8b] px-6 py-3 text-sm font-black text-[#122b34] shadow-lg">PLAY AGAIN ↗</button><button onClick={exit} className="mt-3 w-full rounded-full border border-white/20 px-6 py-2 text-xs font-bold text-white/80">EXIT TO MENU</button></div></div>}
+        {isCity&&!isTouch&&<div className="pointer-events-none absolute bottom-[max(2rem,env(safe-area-inset-bottom))] right-4 z-30 hidden sm:block rounded-2xl border border-white/20 bg-[#081b2a]/85 px-4 py-3 text-center text-xs font-bold text-[#ffe2ae]">DROP · SPACE / F<br />{cityAim?.aligned?"TARGET ALIGNED ✓":"STEER TO A LIT DROP ZONE"}<div className="mt-1 text-[10px] text-white/70">PASS {hud.round.cityPass} · {hud.round.cityDelivered}/{game.deliveryGoal} DELIVERIES</div></div>}
+        {isComplete && <div className="pointer-events-auto absolute inset-0 z-40 grid place-items-center bg-[#041723]/65 p-4 backdrop-blur-md"><div className="result-card max-w-[400px] rounded-3xl border border-amber-200/35 bg-[#092431]/95 p-8 text-center shadow-2xl"><div className="text-5xl">🎁</div><p className="mt-3 text-xs font-bold tracking-[.25em] text-amber-200">{game.express?"CHRISTMAS EVE EXPRESS":game.startedFromCity?"CITY DELIVERY PRACTICE":"ALL THREE CHAPTERS COMPLETE"}</p><h2 className="mt-2 text-3xl font-black text-[#f0d59f]">{missedRoute?"ROUTE FINISHED":game.express?"EXPRESS DELIVERED!":"CHRISTMAS DELIVERED!"}</h2><p className="mt-2 text-sm text-white/80">{game.startedFromCity?hud.round.cityDelivered+" of "+game.deliveryGoal+" stops served · "+hud.round.cityAttempts+" gifts dropped.":"You rescued Santa, recovered the village gifts, and delivered them across Midnight Metropolis."}</p><p className="mt-3 text-xs text-white/65">Run time {clockText(game.finishTime)}{!game.startedFromCity&&" · Best "+clockText(best||game.finishTime)}</p><button onClick={()=>{setMenuOpen(false);start(game.express?"express":game.startedFromCity?"city":"northPole")}} className="mt-6 w-full rounded-full bg-[#edcd8b] px-6 py-3 text-sm font-black text-[#122b34] shadow-lg">PLAY AGAIN ↗</button><button onClick={exit} className="mt-3 w-full rounded-full border border-white/20 px-6 py-2 text-xs font-bold text-white/80">EXIT TO MENU</button></div></div>}
 
       </>}
     </main>

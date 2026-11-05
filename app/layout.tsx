@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Race through a snowy winter world, dodge evil snowmen, and free Santa."
 };
 export const viewport: Viewport = {
-  width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false,
+  viewportFit: "cover", width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false,
   themeColor: "#061b29"
 };
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
