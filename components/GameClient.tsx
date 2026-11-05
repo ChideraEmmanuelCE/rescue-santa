@@ -86,6 +86,7 @@ export default function GameClient() {
   const [mapOpen,setMapOpen]=useState(false);
   const [damageFlash, setDamageFlash] = useState(false);
   const [hitText, setHitText] = useState("");
+  useEffect(()=>{game.paused=menuOpen||mapOpen;return ()=>{game.paused=false;}},[game,menuOpen,mapOpen]);
 
   useEffect(() => {
     try{
