@@ -195,10 +195,12 @@ export default function GameClient() {
   }, [input, game, started, isTouch,menuOpen,mapOpen]);
 
   useEffect(() => game.onEvent((event) => {
-    if(event.type==="foundPresent"||event.type==="presentLanded"||event.type==="enemyHit"){
+    if(event.type==="foundPresent"||event.type==="landmark"||event.type==="milestone"||event.type==="presentLanded"||event.type==="enemyHit"){
       try{localStorage.setItem("rescue-santa-profile-v1",JSON.stringify(game.getProfile()));}catch{}
     }
-    if(event.type==="vehicle"){sound("bell");setHitText((event.boarded?"BOARDED ":"PARKED ")+event.name);}
+    if(event.type==="landmark"){sound("clear");setHitText("DISCOVERED · "+event.name+" · "+event.count+"/"+event.total);}
+    else if(event.type==="milestone"){sound("clear");setHitText("ACHIEVEMENT · "+event.name+" · +"+event.credits+" CREDITS");}
+    else if(event.type==="vehicle"){sound("bell");setHitText((event.boarded?"BOARDED ":"PARKED ")+event.name);}
     else if(event.type==="foundPresent"){sound("clear");setHitText("DISCOVERY · "+event.kind.toUpperCase()+" · "+event.count+"/"+event.total);}
     else if(event.type==="shieldCast"){sound("bell");setHitText("FROST SHIELD · 4.5 SECONDS");}
     else if(event.type==="shieldBlock"){sound("hit");setHitText("SHIELD BLOCKED THE ATTACK");}
@@ -310,7 +312,7 @@ export default function GameClient() {
           <section className="max-w-[68%] rounded-2xl border border-white/15 bg-[#081f2d]/80 p-3 shadow-lg backdrop-blur-lg">
             <div className="text-[12px] font-black tracking-widest">{isCity||isComplete?"✦ MIDNIGHT METROPOLIS":isCityLaunch?"✦ CITY DEPARTURE":chapterTwo?"✦ AURORA VALLEY":"✦ RESCUE SANTA"}</div>
             <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-white/70">{game.express?"EXPRESS · "+clockText(Math.max(0,(CITY_LENGTH-hud.round.cityDistance)/CITY_SPEED*1000)):isCity||isComplete?"CHAPTER III · DELIVERY RUN":isCityLaunch?"CHAPTER III · TAKEOFF":isFlight?"CHAPTER II · SLEIGH FLIGHT":chapterTwo?"CHAPTER II · "+hud.round.giftCount+"/5 GIFTS":"SOLO · ROUND "+hud.round.round}</div>
-            <div className="mt-1 text-[10px] font-bold text-[#f0daaa]">{vehicle?vehicle.name+" · "+Math.round(Math.abs(vehicle.speed)*3.6)+" km/h · Boost "+Math.round(vehicle.boost)+"%":isCity?"SCORE "+hud.round.cityScore+" · COMBO ×"+Math.max(1,hud.round.cityCombo):"Magic "+Math.floor(hud.round.magic)+" · Presents "+hud.round.worldPresents+"/"+LOST_PRESENTS.length}</div>
+            <div className="mt-1 text-[10px] font-bold text-[#f0daaa]">{vehicle?vehicle.name+" · "+Math.round(Math.abs(vehicle.speed)*3.6)+" km/h · Boost "+Math.round(vehicle.boost)+"%":isCity?"SCORE "+hud.round.cityScore+" · COMBO ×"+Math.max(1,hud.round.cityCombo):"Magic "+Math.floor(hud.round.magic)+" · Presents "+hud.round.worldPresents+"/"+LOST_PRESENTS.length+" · Places "+hud.round.worldVisited+"/10"}</div>
             <div className="mt-2 flex items-center gap-1.5"><div className="h-[6px] w-[95px] overflow-hidden rounded-full bg-[#a51f34]/40 sm:w-[150px]"><div className="h-full rounded-full bg-gradient-to-r from-red-600 via-amber-300 to-lime-300 transition-[width]" style={{width:`${isCity||isComplete?Math.min(100,hud.round.cityDelivered/game.deliveryGoal*100):health}%`}}/></div><span className="text-[10px] font-black text-white">{isCity||isComplete?`${hud.round.cityDelivered}/${game.deliveryGoal}`:`${health} HP`}</span></div>
           </section>
         <div className="objective-pill pointer-events-none">
@@ -322,7 +324,7 @@ export default function GameClient() {
             <button aria-label="Game menu" onClick={()=>{input.release();game.hold(false);setMenuOpen(v=>!v)}} className="flex h-[43px] items-center gap-2 rounded-2xl border border-white/20 bg-[#081f2d]/85 px-4 text-[13px] font-black backdrop-blur-lg"><span className="text-lg">☰</span><span className="hidden sm:inline">MENU</span></button>
             {menuOpen && <div className="menu-panel absolute right-0 top-[49px] w-[215px] rounded-2xl border border-white/15 bg-[#081b2a]/95 p-4 shadow-2xl backdrop-blur-xl">
               <div className="mb-3 text-xs font-black text-[#f0d49c]">EXPEDITION STATS</div>
-              <div className="text-[12px]">North Pole: {hud.round.worldPresents}/{LOST_PRESENTS.length} · Credits: {hud.round.credits.toLocaleString()}</div>
+              <div className="text-[12px]">North Pole: {hud.round.worldPresents}/{LOST_PRESENTS.length} · Sites: {hud.round.worldVisited}/10 · Credits: {hud.round.credits.toLocaleString()}</div>
               <div className="mt-1 text-[12px]">Village: {hud.round.giftCount}/5 · City: {hud.round.cityDelivered}/{game.deliveryGoal} · Perfect: {hud.round.cityPerfect}</div>
               <div className="mt-3 border-t border-white/15 pt-2 text-[11px] text-white/70">Defeated: {hud.me?.kills??0} snowmen</div>
               <button onClick={()=>{input.release();setMenuOpen(false);setMapOpen(true)}} className="mb-2 mt-3 w-full rounded-lg border border-amber-200/25 bg-amber-200/10 px-2 py-2 text-xs font-black">🗺 OPEN WORLD MAP · M</button>
