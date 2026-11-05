@@ -7,7 +7,7 @@
     "build": "node scripts/prepare-assets.mjs && npm test && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node tests/solo.cjs"
+    "test": "node tests/solo.cjs && node tests/openworld.cjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

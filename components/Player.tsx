@@ -33,9 +33,23 @@ export function LocalPlayer({ game, input, position }: {
     const body = rigid.current;
     if (!body) return;
     const me = game.myPlayer;
+    const mounted=game.vehicles.active;
+    if(mounted){
+      const v=input.getMovement();
+      game.setVehicleControls(v.x,v.z,input.keys.has("Space"),input.keys.has("ShiftLeft")||input.keys.has("ShiftRight"));
+      const dest={x:mounted.x,y:1.15,z:mounted.z};
+      body.setTranslation(dest,true);body.setLinvel({x:0,y:0,z:0},true);
+      if(model.current)model.current.visible=false;
+      input.yaw=mounted.heading;
+      input.consumeJump();input.consumeThrow();
+      position.current.set(dest.x,dest.y,dest.z);
+      game.setLocalPose(dest.x,dest.y,dest.z,mounted.heading);
+      return;
+    }
+    if(model.current)model.current.visible=true;
     if (me && lastSpawn.current !== game.spawnVersion) {
       lastSpawn.current = game.spawnVersion;
-      input.yaw=Math.atan2(-me.x,me.z);
+      input.yaw=me.yaw;
       body.setTranslation({ x: me.x, y: me.y, z: me.z }, true);
       body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     }
